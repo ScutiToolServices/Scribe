@@ -18,7 +18,7 @@ services:
       SCRIBE_STREAM_IDLE_S: ${SCRIBE_STREAM_IDLE_S:-15}
       SCRIBE_STREAM_WINDOW_S: ${SCRIBE_STREAM_WINDOW_S:-30}
     ports:
-      - "127.0.0.1:${SCRIBE_PORT:-8091}:8091"
+      - "${SCRIBE_BIND:-0.0.0.0}:${SCRIBE_PORT:-8091}:8091"
     volumes:
       - scribe_data:/data
     healthcheck:
