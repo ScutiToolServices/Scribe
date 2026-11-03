@@ -45,7 +45,7 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
     config = config if config is not None else make_config(settings)
     base, settings = settings, live(settings, config)
     engine = engine or WhisperEngine(
-        base.models_dir, settings.model, base.ffmpeg,
+        base.models_dir, settings.model, lambda: settings.ffmpeg,
         max_seconds=lambda: settings.max_seconds, decode_timeout_s=lambda: settings.timeout_s,
     )
     store = AudioStore(base.audio_dir, lambda: settings.ttl_seconds, lambda: settings.quota_bytes)

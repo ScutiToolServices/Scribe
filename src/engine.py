@@ -41,12 +41,12 @@ class SttEngine(Protocol):
 
 class WhisperEngine:
     def __init__(
-        self, models_dir: Path, model_name: str, ffmpeg: str,
+        self, models_dir: Path, model_name: str, ffmpeg: str | Callable[[], str],
         max_seconds: float | Callable[[], float] = 150, decode_timeout_s: float | Callable[[], float] = 110,
     ) -> None:
         self.model_name = model_name
         self._models_dir = Path(models_dir)
-        self._ffmpeg = ffmpeg
+        self._ffmpeg = as_getter(ffmpeg)
         self._max_seconds = as_getter(max_seconds)
         self._decode_timeout_s = as_getter(decode_timeout_s)
         self._model = None
@@ -58,7 +58,7 @@ class WhisperEngine:
     async def decode(self, path: Path) -> bytes:
         try:
             process = await asyncio.create_subprocess_exec(
-                self._ffmpeg, "-v", "error", "-nostdin", "-i", str(path),
+                self._ffmpeg(), "-v", "error", "-nostdin", "-i", str(path),
                 "-t", f"{self._limit() + 1:g}",
                 "-f", "s16le", "-ar", "16000", "-ac", "1", "pipe:1",
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
