@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings</title>
+<style>
+/* Same tokens as the LayaModel admin page. This file is identical in Bard and Scribe; the service name comes from the API. */
+:root {
+  --bg: light-dark(#ffffff, #17171a);
+  --surface: light-dark(#f6f6f7, #1f1f23);
+  --text: light-dark(#1c1c1f, #e8e8ea);
+  --muted: light-dark(#6b6b73, #9a9aa3);
+  --border: light-dark(#e3e3e6, #2f2f35);
+  --accent: light-dark(#b23d06, #ff7a33);
+  --accent-contrast: light-dark(#ffffff, #17171a);
+  --error: light-dark(#d03b3b, #ff8282);
+  --radius: 8px;
+  color-scheme: light dark;
+  font: 15px/1.55 system-ui, "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; }
+main { max-width: 640px; margin: 0 auto; padding: 32px 16px; }
+h1 { font-size: 1.35em; margin: 0 0 6px; }
+.muted { color: var(--muted); font-size: .9em; margin: 0 0 16px; }
+.card { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 20px; }
+label { display: block; font-weight: 500; font-size: .9em; margin-bottom: 4px; }
+input { width: 100%; font: inherit; color: inherit; border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 12px; background: var(--bg); }
+input[type="checkbox"] { width: auto; }
+button { font: inherit; min-height: 40px; border: 1px solid var(--border); border-radius: 9999px; padding: 7px 16px; background: transparent; color: inherit; font-weight: 600; cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
+button.small { min-height: 32px; padding: 3px 10px; font-size: .8em; }
+button:disabled { opacity: .55; cursor: default; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.setting { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+small { display: block; margin-top: 4px; color: var(--muted); }
+.row { display: flex; gap: 10px; margin-top: 14px; }
+.row input { flex: 1; }
+.error { color: var(--error); min-height: 1.5em; margin: 10px 0 0; overflow-wrap: anywhere; }
+.note { color: var(--accent); min-height: 1.5em; margin: 6px 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1 id="title">Settings</h1>
+  <p class="muted">A value saved here beats the environment variable. Reset goes back to it. Options marked restart apply after the service restarts.</p>
+  <section id="signin" class="card">
+    <form id="login">
+      <label for="password">Admin password</label>
+      <input id="password" type="password" autocomplete="current-password" required>
+      <div class="row"><button class="primary" id="signin-button">Sign in</button></div>
+    </form>
+  </section>
+  <section id="panel" class="card" hidden>
+    <form id="form">
+      <div id="list"></div>
+      <div class="row"><button class="primary" id="save">Save changes</button><button type="button" id="signout">Sign out</button></div>
+    </form>
+    <p id="note" class="note" role="status"></p>
+  </section>
+  <p id="error" class="error" role="alert"></p>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let password = "", rows = [], noteTimer;
+try { password = sessionStorage.getItem("admin") || ""; } catch {}
+
+async function call(method, values) {
+  let response;
+  try {
+    response = await fetch("settings", {
+      method, headers: {"X-Admin-Password": password, "Content-Type": "application/json"},
+      body: values ? JSON.stringify({values}) : undefined, signal: AbortSignal.timeout(10000)
+    });
+  } catch { throw new Error("Could not reach the service."); }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.detail || "Request failed (" + response.status + ").");
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
+function show(data) {
+  rows = data.settings;
+  $("title").textContent = data.service + " settings";
+  document.title = data.service + " settings";
+  $("signin").hidden = true;
+  $("panel").hidden = false;
+  $("list").replaceChildren(...rows.map(row => {
+    const box = document.createElement("div"), top = document.createElement("div");
+    const label = document.createElement("label"), input = document.createElement("input"), help = document.createElement("small");
+    box.className = "setting"; top.className = "top";
+    input.id = "s-" + row.key; label.htmlFor = input.id; label.textContent = row.label;
+    if (row.kind === "bool") { input.type = "checkbox"; input.checked = !!row.value; }
+    else if (row.kind === "text") { input.type = "text"; input.value = row.value; input.autocomplete = "off"; }
+    else {
+      input.type = "number"; input.step = row.kind === "int" ? "1" : "any"; input.value = row.value;
+      if (row.minimum != null) input.min = row.minimum;
+      if (row.maximum != null) input.max = row.maximum;
+    }
+    help.textContent = [row.help, "From " + row.source + (row.restart ? " · applies after a restart" : "")].filter(Boolean).join(" · ");
+    top.append(label);
+    if (row.source === "saved") {
+      const reset = document.createElement("button");
+      reset.type = "button"; reset.className = "small"; reset.textContent = "Reset";
+      reset.setAttribute("aria-label", "Reset " + row.label);
+      reset.onclick = () => save({[row.key]: null});
+      top.append(reset);
+    }
+    box.append(top, input, help);
+    return box;
+  }));
+}
+function value(row) {
+  const input = $("s-" + row.key);
+  if (row.kind === "bool") return input.checked;
+  if (row.kind === "text") return input.value.trim();
+  return input.value === "" ? null : Number(input.value);
+}
+function fail(error) {
+  if (error.status === 401) {
+    password = "";
+    try { sessionStorage.removeItem("admin"); } catch {}
+    $("panel").hidden = true;
+    $("signin").hidden = false;
+  }
+  $("error").textContent = error.message;
+}
+async function save(values) {
+  $("error").textContent = ""; $("note").textContent = "";
+  $("save").disabled = true;
+  try {
+    show(await call("PUT", values));
+    $("note").textContent = "Saved";
+    clearTimeout(noteTimer);
+    noteTimer = setTimeout(() => { $("note").textContent = ""; }, 3000);
+  } catch (error) { fail(error); }
+  finally { $("save").disabled = false; }
+}
+async function open(candidate) {
+  password = candidate; $("error").textContent = "";
+  try {
+    show(await call("GET"));
+    try { sessionStorage.setItem("admin", password); } catch {}
+    $("password").value = "";
+  } catch (error) { fail(error); }
+}
+$("login").onsubmit = event => { event.preventDefault(); open($("password").value); };
+$("form").onsubmit = event => {
+  event.preventDefault();
+  const values = {};
+  for (const row of rows) {
+    const next = value(row);
+    if (next !== null && next !== row.value) values[row.key] = next;
+  }
+  if (Object.keys(values).length) save(values); else $("note").textContent = "Nothing changed";
+};
+$("signout").onclick = () => {
+  password = "";
+  try { sessionStorage.removeItem("admin"); } catch {}
+  $("panel").hidden = true; $("signin").hidden = false; $("list").replaceChildren();
+};
+if (password) open(password);
+</script>
+</body>
+</html>
