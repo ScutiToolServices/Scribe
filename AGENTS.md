@@ -5,11 +5,11 @@ Speech-to-text MCP server for Citadel and Ember. A standalone service on port 80
 ## Agent instructions
 This file is the one instruction file for every coding agent; `CLAUDE.md` only imports it (`@AGENTS.md`). Edit this file, never `CLAUDE.md`.
 
-## Commands (from this folder, venv `.venv_scribe`)
-- Install: `python -m venv .venv_scribe`, then `.venv_scribe/Scripts/python.exe -m pip install -e ".[dev]"`
-- Test: `.venv_scribe/Scripts/python.exe -m pytest -q`
-- Run: `.venv_scribe/Scripts/python.exe -m src.run` (the model downloads into `.data/models` on first transcription)
-- Benchmark: `.venv_scribe/Scripts/python.exe scripts/bench.py <audio file>`
+## Commands (from this folder, venv `.venv`, managed by uv)
+- Install: `uv sync` (`python -m pip install uv` if missing; on this machine set `UV_CACHE_DIR=D:/User/.uv-cache`)
+- Test: `uv run pytest -q`
+- Run: `uv run python -m src.run` (the model downloads into `.data/models` on first transcription)
+- Benchmark: `uv run python scripts/bench.py <audio file>`
 
 ## Rules
 - Never read or print `.env`.

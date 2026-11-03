@@ -1,4 +1,4 @@
-.venv_scribe/
+.venv/
 .data/
 .env
 __pycache__/

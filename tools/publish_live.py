@@ -31,6 +31,7 @@ DEPLOY_PATHS = [
     ".env.example",
     "VERSION",
     "pyproject.toml",
+    "uv.lock",  # the Dockerfile copies it: `uv sync --frozen`
     "src",
     "README.md",
 ]
