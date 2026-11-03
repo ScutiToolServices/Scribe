@@ -113,3 +113,10 @@ def test_admin_refuses_bad_values(settings):
 
 def test_admin_page_is_served_without_the_internal_token(settings):
     assert admin(settings).get("/admin/").status_code == 200
+
+
+def test_admin_upload_limit_applies_without_restart(settings):
+    c = admin(settings)
+    assert c.post("/api/files", content=audio(1.0), headers=ANN).status_code == 200
+    assert c.put("/admin/settings", json={"values": {"max_upload_mb": 1}}, headers=AUTH).status_code == 200
+    assert c.post("/api/files", content=b"" * (2 * 1024 * 1024), headers=ANN).status_code == 413

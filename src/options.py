@@ -13,6 +13,7 @@ FIELDS = {
     "model": ("model", str),
     "max_seconds": ("max_seconds", int),
     "timeout_s": ("timeout_s", int),
+    "max_bytes": ("max_upload_mb", lambda mb: int(mb * MB)),
     "ttl_seconds": ("ttl_hours", lambda hours: hours * 3600),
     "quota_bytes": ("quota_mb", lambda mb: mb * MB),
     "concurrency": ("concurrency", int),
@@ -20,6 +21,7 @@ FIELDS = {
     "stream_max_frame_bytes": ("stream_max_frame_bytes", int),
     "stream_idle_s": ("stream_idle_s", float),
     "stream_window_s": ("stream_window_s", float),
+    "ffmpeg": ("ffmpeg", str),
 }
 
 _TUNED = "Armory cancels a call after 120 s: raise only after benchmarking (scripts/bench.py)"
@@ -33,6 +35,7 @@ def schema(base: Settings) -> list[Setting]:
                 help="Live dictation is capped at 150 s. " + _TUNED),
         Setting("timeout_s", "Transcription time limit (seconds)", "int", base.timeout_s, minimum=1, maximum=600,
                 help=_TUNED),
+        Setting("max_upload_mb", "Largest upload (MB)", "float", base.max_bytes / MB, minimum=0.1, maximum=1024),
         Setting("ttl_hours", "Keep uploads for (hours)", "int", base.ttl_seconds // 3600, minimum=1, maximum=8760),
         Setting("quota_mb", "Audio storage per user (MB)", "int", base.quota_bytes // MB, minimum=1, maximum=100000),
         Setting("concurrency", "Transcriptions at once", "int", base.concurrency, minimum=1, maximum=16, restart=True),
@@ -42,6 +45,7 @@ def schema(base: Settings) -> list[Setting]:
                 minimum=1024, maximum=1048576, restart=True),
         Setting("stream_idle_s", "Dictation idle timeout (seconds)", "float", base.stream_idle_s, minimum=1, maximum=300),
         Setting("stream_window_s", "Dictation audio window (seconds)", "float", base.stream_window_s, minimum=5, maximum=120),
+        Setting("ffmpeg", "ffmpeg program", "text", base.ffmpeg, blank=False, help="A name on PATH or a full path"),
     ]
 
 
