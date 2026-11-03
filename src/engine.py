@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
 from src.errors import AudioRejected, EngineFailed
+from src.runtime import as_getter
 
 PCM_BYTES_PER_SECOND = 16000 * 2  # 16 kHz, mono, 16-bit
 
@@ -40,21 +42,24 @@ class SttEngine(Protocol):
 class WhisperEngine:
     def __init__(
         self, models_dir: Path, model_name: str, ffmpeg: str,
-        max_seconds: float = 150, decode_timeout_s: float = 110,
+        max_seconds: float | Callable[[], float] = 150, decode_timeout_s: float | Callable[[], float] = 110,
     ) -> None:
         self.model_name = model_name
         self._models_dir = Path(models_dir)
         self._ffmpeg = ffmpeg
-        self._max_seconds = min(150, max_seconds)
-        self._decode_timeout_s = decode_timeout_s
+        self._max_seconds = as_getter(max_seconds)
+        self._decode_timeout_s = as_getter(decode_timeout_s)
         self._model = None
         self._lock = asyncio.Lock()
+
+    def _limit(self) -> float:
+        return min(150, self._max_seconds())
 
     async def decode(self, path: Path) -> bytes:
         try:
             process = await asyncio.create_subprocess_exec(
                 self._ffmpeg, "-v", "error", "-nostdin", "-i", str(path),
-                "-t", f"{self._max_seconds + 1:g}",
+                "-t", f"{self._limit() + 1:g}",
                 "-f", "s16le", "-ar", "16000", "-ac", "1", "pipe:1",
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
             )
@@ -64,7 +69,7 @@ class WhisperEngine:
         # than silently truncated. Do not retain arbitrarily verbose stderr.
         output = asyncio.create_task(process.communicate())
         try:
-            pcm, _ = await asyncio.wait_for(asyncio.shield(output), self._decode_timeout_s)
+            pcm, _ = await asyncio.wait_for(asyncio.shield(output), self._decode_timeout_s())
         except (TimeoutError, asyncio.CancelledError) as error:
             if process.returncode is None:
                 try:
@@ -77,7 +82,7 @@ class WhisperEngine:
             raise EngineFailed("Audio decoding took too long. Try a shorter file.") from error
         if process.returncode != 0 or not pcm:
             raise AudioRejected("That file is not audio Scribe can read.")
-        if len(pcm) > self._max_seconds * PCM_BYTES_PER_SECOND:
+        if len(pcm) > self._limit() * PCM_BYTES_PER_SECOND:
             raise AudioRejected("That audio is too long.")
         return pcm
 

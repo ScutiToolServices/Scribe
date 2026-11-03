@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
+import hmac
+import os
+from pathlib import Path
 from typing import Annotated
 
 from mcp.server.fastmcp import Context, FastMCP
@@ -11,18 +15,23 @@ from pydantic import Field
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from starlette.staticfiles import StaticFiles
 from starlette.websockets import WebSocket
-from starlette.routing import WebSocketRoute
+from starlette.routing import Mount, WebSocketRoute
 
-from src.config import Settings
+from src.config import PROJECT_DIR, Settings
 from src.contract import TranscribeResult
 from src.engine import SttEngine, WhisperEngine
 from src.errors import AudioRejected, EngineFailed, IdentityRequired, QuotaExceeded, ScribeError
 from src.identity import owner_from_context
 from src.middleware import InternalTokenMiddleware
+from src.options import live, make_config
+from src.runtime import Config
 from src.service import ScribeService
 from src.store import AudioStore
 from src.streaming import serve_stream
+
+WEB_DIR = Path(os.environ.get("SCRIBE_WEB_DIR") or PROJECT_DIR / "web")
 
 INSTRUCTIONS = (
     "Speech to text (English). The user attaches an audio file in chat; the question then contains a line "
@@ -30,12 +39,16 @@ INSTRUCTIONS = (
 )
 
 
-def build_app(settings: Settings, engine: SttEngine | None = None) -> Starlette:
+def build_app(settings: Settings, engine: SttEngine | None = None, config: Config | None = None) -> Starlette:
+    """`config` (default: from SCRIBE_ADMIN_PASSWORD, see options.make_config) makes the options in options.py
+    changeable on /admin/ while running; without it they stay as the environment set them."""
+    config = config if config is not None else make_config(settings)
+    base, settings = settings, live(settings, config)
     engine = engine or WhisperEngine(
-        settings.models_dir, settings.model, settings.ffmpeg,
-        max_seconds=settings.max_seconds, decode_timeout_s=settings.timeout_s,
+        base.models_dir, settings.model, base.ffmpeg,
+        max_seconds=lambda: settings.max_seconds, decode_timeout_s=lambda: settings.timeout_s,
     )
-    store = AudioStore(settings.audio_dir, settings.ttl_seconds, settings.quota_bytes)
+    store = AudioStore(base.audio_dir, lambda: settings.ttl_seconds, lambda: settings.quota_bytes)
     store.sweep()
     service = ScribeService(engine, store, settings)
     mcp = FastMCP(name="scribe", instructions=INSTRUCTIONS, host=settings.host, port=settings.port)
@@ -117,7 +130,28 @@ def build_app(settings: Settings, engine: SttEngine | None = None) -> Starlette:
     async def stream(websocket: WebSocket) -> None:
         await serve_stream(websocket, service, settings)
 
+    if config is not None:
+        @mcp.custom_route("/admin/settings", methods=["GET", "PUT"])
+        async def admin_settings(request: Request) -> Response:
+            given = request.headers.get("x-admin-password", "").encode("utf-8")
+            if not hmac.compare_digest(given, base.admin_password.encode("utf-8")):
+                return JSONResponse({"detail": "Wrong admin password."}, status_code=401)
+            if request.method == "PUT":
+                try:
+                    values = (await request.json())["values"]
+                    if not isinstance(values, dict):
+                        raise TypeError
+                except (ValueError, KeyError, TypeError):
+                    return JSONResponse({"detail": "Send {\"values\": {...}}."}, status_code=422)
+                try:
+                    await asyncio.to_thread(config.set, values)
+                except ValueError as error:
+                    return JSONResponse({"detail": str(error)}, status_code=422)
+            return JSONResponse({"service": "Scribe", "settings": config.describe()})
+
     app = mcp.streamable_http_app()
+    if config is not None and WEB_DIR.is_dir():
+        app.router.routes.append(Mount("/admin", StaticFiles(directory=WEB_DIR, html=True)))
     app.router.routes.append(WebSocketRoute("/api/stream", stream))
     app.add_middleware(InternalTokenMiddleware, token=settings.internal_token)
     return app

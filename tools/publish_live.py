@@ -33,6 +33,7 @@ DEPLOY_PATHS = [
     "pyproject.toml",
     "uv.lock",  # the Dockerfile copies it: `uv sync --frozen`
     "src",
+    "web",  # the Dockerfile copies it (admin settings page)
     "README.md",
 ]
 # Left out of live: Python tests/ folders are not built into the image.

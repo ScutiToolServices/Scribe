@@ -77,3 +77,39 @@ def test_dictation_engine_failure_is_503(settings):
     response = client.post("/api/transcribe", content=audio(), headers=ANN)
     assert response.status_code == 503
     assert response.json()["error"] == "engine_failed"
+
+
+def admin(settings):
+    return TestClient(build_app(replace(settings, admin_password="pw"), FakeEngine()))
+
+
+AUTH = {"X-Admin-Password": "pw"}
+
+
+def test_admin_is_off_without_a_password(settings):
+    assert make(settings).get("/admin/settings").status_code in (404, 405)
+
+
+def test_admin_needs_the_password(settings):
+    c = admin(settings)
+    assert c.get("/admin/settings").status_code == 401
+    assert c.put("/admin/settings", json={"values": {}}, headers={"X-Admin-Password": "x"}).status_code == 401
+
+
+def test_admin_saves_and_the_service_uses_it(settings):
+    c = admin(settings)
+    rows = {r["key"]: r for r in c.get("/admin/settings", headers=AUTH).json()["settings"]}
+    assert rows["max_seconds"]["value"] == settings.max_seconds and rows["model"]["restart"]
+    assert c.put("/admin/settings", json={"values": {"max_seconds": 1}}, headers=AUTH).status_code == 200
+    assert c.post("/api/files", content=audio(2.0), headers=ANN).status_code == 400  # now over the 1 s limit
+
+
+def test_admin_refuses_bad_values(settings):
+    c = admin(settings)
+    assert c.put("/admin/settings", json={"values": {"max_seconds": 0}}, headers=AUTH).status_code == 422
+    assert c.put("/admin/settings", json={"values": {"nope": 1}}, headers=AUTH).status_code == 422
+    assert c.put("/admin/settings", json={"oops": 1}, headers=AUTH).status_code == 422
+
+
+def test_admin_page_is_served_without_the_internal_token(settings):
+    assert admin(settings).get("/admin/").status_code == 200

@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.errors import QuotaExceeded
+from src.runtime import as_getter
 
 _ID = re.compile(r"^[0-9a-f]{32}$")
 
@@ -31,11 +32,11 @@ class StoredAudio:
 
 class AudioStore:
     def __init__(
-        self, root: Path, ttl_seconds: int, quota_bytes: int, clock: Callable[[], float] = time.time
+        self, root: Path, ttl_seconds: int | Callable[[], int], quota_bytes: int | Callable[[], int], clock: Callable[[], float] = time.time
     ) -> None:
         self._root = Path(root)
-        self._ttl = ttl_seconds
-        self._quota = quota_bytes
+        self._ttl = as_getter(ttl_seconds)
+        self._quota = as_getter(quota_bytes)
         self._clock = clock
 
     @staticmethod
@@ -43,7 +44,7 @@ class AudioStore:
         return hashlib.sha256(owner.encode("utf-8") + b"\0" + data).hexdigest()[:32]
 
     def expires_at(self, stored: StoredAudio) -> float:
-        return stored.created_at + self._ttl
+        return stored.created_at + self._ttl()
 
     def _owner_dir(self, owner: str) -> Path:
         return self._root / hashlib.sha256(owner.encode("utf-8")).hexdigest()[:16]
@@ -107,7 +108,7 @@ class AudioStore:
         owner_dir.mkdir(parents=True, exist_ok=True)
         self._sweep_dir(owner_dir)
         used = sum(p.stat().st_size for p in owner_dir.glob("*.bin"))
-        if used + len(data) > self._quota:
+        if used + len(data) > self._quota():
             raise QuotaExceeded("Your audio storage is full. Wait for older audio to expire and try again.")
         created = self._clock()
         meta = {"filename": filename, "duration_s": duration_s, "created_at": created}
@@ -119,7 +120,7 @@ class AudioStore:
         owner_dir = self._owner_dir(owner)
         self._sweep_dir(owner_dir)
         used = sum(p.stat().st_size for p in owner_dir.glob("*.bin"))
-        if used + additional_bytes > self._quota:
+        if used + additional_bytes > self._quota():
             raise QuotaExceeded("Your audio storage is full. Wait for older audio to expire and try again.")
 
     def get_transcript(self, owner: str, file_id: str, model: str) -> dict | None:

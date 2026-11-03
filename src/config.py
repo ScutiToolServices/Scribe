@@ -32,6 +32,8 @@ class Settings:
     stream_max_frame_bytes: int = 64000
     stream_idle_s: float = 15
     stream_window_s: float = 30
+    # Unlocks /admin/ (settings page). Empty = the page is off and settings stay as the environment set them.
+    admin_password: str = ""
 
     @property
     def audio_dir(self) -> Path:
@@ -71,4 +73,5 @@ def load_settings() -> Settings:
         stream_max_frame_bytes=int(env("SCRIBE_STREAM_MAX_FRAME_BYTES", "64000")),
         stream_idle_s=float(env("SCRIBE_STREAM_IDLE_S", "15")),
         stream_window_s=float(env("SCRIBE_STREAM_WINDOW_S", "30")),
+        admin_password=env("SCRIBE_ADMIN_PASSWORD", ""),
     )
