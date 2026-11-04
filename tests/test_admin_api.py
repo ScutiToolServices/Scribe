@@ -13,7 +13,7 @@ from src.admin_api import Backends, ProbeError, Slot, Usage, check, register
 REAL_CLIENT = httpx.AsyncClient
 
 
-def make(tmp_path, defaults=None, probe=None, local=True):
+def make(tmp_path, defaults=None, probe=None, local=True, playground=None):
     seen = []
 
     async def default_probe(url, token):
@@ -25,12 +25,25 @@ def make(tmp_path, defaults=None, probe=None, local=True):
 
     usage, backends = Usage(), Backends(tmp_path / "backends.json", defaults)
     mcp = FastMCP("t")
-    register(mcp, service="Test", admin_password="pw", usage=usage, backends=backends, status=status,
+    register(mcp, service="Test", admin_password="pw", usage=usage, backends=backends, status=status, playground=playground,
              slots=[Slot("one", "Model one", "help", probe or default_probe, "http://127.0.0.1:1", local)])
     return TestClient(mcp.streamable_http_app()), usage, backends, seen
 
 
 PW = {"X-Admin-Password": "pw"}
+
+
+def test_playground_descriptor_requires_admin_auth_and_is_returned_unchanged(tmp_path):
+    descriptor = {"operations": [{"label": "Speak", "route": "/api/speak", "method": "POST",
+                                  "encoding": "json", "fields": [], "response": "json"}]}
+    c, *_ = make(tmp_path, playground=descriptor)
+    assert c.get("/admin/status").status_code == 401
+    assert c.get("/admin/status", headers=PW).json()["playground"] == descriptor
+
+
+def test_playground_descriptor_is_optional(tmp_path):
+    c, *_ = make(tmp_path)
+    assert c.get("/admin/status", headers=PW).json()["playground"] is None
 
 
 def test_every_route_needs_the_admin_password(tmp_path):

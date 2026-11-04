@@ -34,6 +34,15 @@ from src.streaming import serve_stream
 
 WEB_DIR = Path(os.environ.get("SCRIBE_WEB_DIR") or PROJECT_DIR / "web")
 
+PLAYGROUND = {"operations": [{
+    "label": "Transcribe", "route": "/api/transcribe", "method": "POST", "encoding": "raw", "response": "json",
+    "fields": [
+        {"key": "X-Requester-Username", "label": "Requester username", "type": "text", "location": "header",
+         "required": True, "default": "playground"},
+        {"key": "file", "label": "Audio file", "type": "file", "required": True, "accept": "audio/*"},
+    ],
+}]}
+
 INSTRUCTIONS = (
     "Speech to text (English). The user attaches an audio file in chat; the question then contains a line "
     "'[Audio file_id: ...]'. Call tool_scribe_transcribe with that file_id to get the transcript."
@@ -151,7 +160,8 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
                 {"label": "Speech model runs", "value": "in a model service" if remote else "in this process"}]
 
     if config is not None:
-        register(mcp, service="Scribe", admin_password=base.admin_password, usage=usage, backends=backends, status=status, slots=[
+        register(mcp, service="Scribe", admin_password=base.admin_password, usage=usage, backends=backends, status=status,
+                 playground=PLAYGROUND, slots=[
             Slot("whisper", "Speech to text", "Local runs faster-whisper inside Scribe. A model service is a STTWhisperModel address; "
                  "its model must match Scribe's model option, which keys the transcript cache.", probe_whisper, "http://127.0.0.1:9230"),
         ])
