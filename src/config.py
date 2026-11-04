@@ -22,6 +22,9 @@ class Settings:
     # small.en was x0.5 there. Raise both together on a faster or GPU host.
     model: str = "base.en"
     ffmpeg: str = "ffmpeg"
+    # Empty = run faster-whisper inside Scribe. Set = call the WhisperModel service (SCRIBE_MODEL must match its model).
+    whisper_url: str = ""
+    whisper_token: str = ""
     max_bytes: int = 25 * 1024 * 1024
     max_seconds: int = 150
     ttl_seconds: int = 24 * 3600
@@ -63,6 +66,8 @@ def load_settings() -> Settings:
         data_dir=Path(env("SCRIBE_DATA_DIR") or PROJECT_DIR / ".data"),
         model=env("SCRIBE_MODEL", "base.en"),
         ffmpeg=env("SCRIBE_FFMPEG", "ffmpeg"),
+        whisper_url=env("SCRIBE_WHISPER_URL", ""),
+        whisper_token=env("SCRIBE_WHISPER_TOKEN", ""),
         max_bytes=int(env("SCRIBE_MAX_BYTES", str(25 * 1024 * 1024))),
         max_seconds=int(env("SCRIBE_MAX_SECONDS", "150")),
         ttl_seconds=int(env("SCRIBE_TTL_HOURS", "24")) * 3600,

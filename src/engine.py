@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
+import httpx
+
 from src.errors import AudioRejected, EngineFailed
 from src.runtime import as_getter
 
@@ -111,4 +113,39 @@ class WhisperEngine:
                     self._model = await asyncio.to_thread(self._load)
             return await asyncio.to_thread(self._run, pcm)
         except Exception as error:  # model errors vary; never leak their text (may hold paths)
+            raise EngineFailed("Transcription failed. Try again.") from error
+
+
+class HttpWhisperEngine(WhisperEngine):
+    """Same ffmpeg decoding as WhisperEngine, but the model is the WhisperModel service (AI/ModelServices/WhisperModel):
+    PCM goes to `POST {url}/v1/transcribe`. `model_name` is the configured name, so it must match the service's model;
+    cached transcripts are keyed by it.
+
+    shortcut: one new connection per call (localhost, a few calls a second at most), upgrade to a shared client if
+    dictation latency shows it."""
+
+    def __init__(
+        self, url: str, token: str, model_name: str, ffmpeg: str | Callable[[], str],
+        max_seconds: float | Callable[[], float] = 150, decode_timeout_s: float | Callable[[], float] = 110,
+        timeout_s: float | Callable[[], float] = 115,
+    ) -> None:
+        super().__init__(Path("."), model_name, ffmpeg, max_seconds, decode_timeout_s)
+        self._url = url.rstrip("/") + "/v1/transcribe"
+        self._headers = {"X-Internal-Token": token} if token else {}
+        self._timeout_s = as_getter(timeout_s)
+
+    async def transcribe(self, pcm: bytes) -> Transcript:
+        params = {"language": "en", "beam_size": 1, "word_timestamps": "true"}
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout_s()) as http:
+                reply = await http.post(self._url, params=params, content=pcm, headers=self._headers)
+            reply.raise_for_status()
+            body = reply.json()
+            return Transcript(
+                body["text"],
+                [Segment(s["start_s"], s["end_s"], s["text"]) for s in body["segments"]],
+                body["language"],
+                [Segment(w["start_s"], w["end_s"], w["text"]) for w in body["words"]],
+            )
+        except Exception as error:  # httpx, JSON and shape errors vary; never leak their text (may hold URLs)
             raise EngineFailed("Transcription failed. Try again.") from error
