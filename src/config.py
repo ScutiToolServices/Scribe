@@ -22,7 +22,7 @@ class Settings:
     # small.en was x0.5 there. Raise both together on a faster or GPU host.
     model: str = "base.en"
     ffmpeg: str = "ffmpeg"
-    # Empty = run faster-whisper inside Scribe. Set = call the WhisperModel service (SCRIBE_MODEL must match its model).
+    # Empty = run faster-whisper inside Scribe. Set = call the STTWhisperModel service (SCRIBE_MODEL must match its model).
     whisper_url: str = ""
     whisper_token: str = ""
     max_bytes: int = 25 * 1024 * 1024
