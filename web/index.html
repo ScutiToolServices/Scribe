@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Settings</title>
+<title>Service admin</title>
 <style>
-/* Same tokens as the LayaModel admin page. This file is identical in Bard and Scribe; the service name comes from the API. */
+/* Same tokens as the model-service admin page. This file is identical in Bard, Scribe and UnlimitedOCR; the service name comes from the API. */
 :root {
   --bg: light-dark(#ffffff, #17171a);
   --surface: light-dark(#f6f6f7, #1f1f23);
@@ -14,6 +14,7 @@
   --border: light-dark(#e3e3e6, #2f2f35);
   --accent: light-dark(#b23d06, #ff7a33);
   --accent-contrast: light-dark(#ffffff, #17171a);
+  --ok: light-dark(#1b7a3d, #5fd38a);
   --error: light-dark(#d03b3b, #ff8282);
   --radius: 8px;
   color-scheme: light dark;
@@ -24,12 +25,13 @@
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
 body { margin: 0; }
-main { max-width: 640px; margin: 0 auto; padding: 32px 16px; }
+main { max-width: 760px; margin: 0 auto; padding: 32px 16px 56px; }
 h1 { font-size: 1.35em; margin: 0 0 6px; }
+h2 { font-size: 1.05em; margin: 0 0 4px; }
 .muted { color: var(--muted); font-size: .9em; margin: 0 0 16px; }
-.card { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 20px; }
+.card { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 20px; margin-bottom: 16px; }
 label { display: block; font-weight: 500; font-size: .9em; margin-bottom: 4px; }
-input { width: 100%; font: inherit; color: inherit; border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 12px; background: var(--bg); }
+input, select { width: 100%; font: inherit; color: inherit; border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 12px; background: var(--bg); }
 input[type="checkbox"] { width: auto; }
 button { font: inherit; min-height: 40px; border: 1px solid var(--border); border-radius: 9999px; padding: 7px 16px; background: transparent; color: inherit; font-weight: 600; cursor: pointer; }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
@@ -39,16 +41,36 @@ button:disabled { opacity: .55; cursor: default; }
 .setting { padding: 12px 0; border-bottom: 1px solid var(--border); }
 .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 small { display: block; margin-top: 4px; color: var(--muted); }
-.row { display: flex; gap: 10px; margin-top: 14px; }
+.row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
 .row input { flex: 1; }
+.head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .error { color: var(--error); min-height: 1.5em; margin: 10px 0 0; overflow-wrap: anywhere; }
 .note { color: var(--accent); min-height: 1.5em; margin: 6px 0 0; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 12px; }
+.tile { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); padding: 10px 12px; }
+.tile b { display: block; font-size: 1.15em; overflow-wrap: anywhere; }
+.tile span { color: var(--muted); font-size: .82em; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: .92em; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+th { color: var(--muted); font-weight: 500; font-size: .85em; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.slot { padding: 14px 0; border-bottom: 1px solid var(--border); }
+.slot:last-child { border-bottom: 0; }
+.field { margin-top: 10px; }
+.result { min-height: 1.4em; margin: 8px 0 0; font-size: .92em; overflow-wrap: anywhere; }
+.result.ok { color: var(--ok); }
+.result.bad { color: var(--error); }
 </style>
 </head>
 <body>
 <main>
-  <h1 id="title">Settings</h1>
-  <p class="muted">A value saved here beats the environment variable. Reset goes back to it. Options marked restart apply after the service restarts.</p>
+  <div class="head">
+    <div>
+      <h1 id="title">Service admin</h1>
+      <p class="muted">Status, which model services this service uses, and its settings.</p>
+    </div>
+    <button type="button" id="signout" hidden>Sign out</button>
+  </div>
   <section id="signin" class="card">
     <form id="login">
       <label for="password">Admin password</label>
@@ -56,26 +78,47 @@ small { display: block; margin-top: 4px; color: var(--muted); }
       <div class="row"><button class="primary" id="signin-button">Sign in</button></div>
     </form>
   </section>
-  <section id="panel" class="card" hidden>
-    <form id="form">
-      <div id="list"></div>
-      <div class="row"><button class="primary" id="save">Save changes</button><button type="button" id="signout">Sign out</button></div>
-    </form>
-    <p id="note" class="note" role="status"></p>
-  </section>
+  <div id="panel" hidden>
+    <section class="card" aria-labelledby="status-title">
+      <h2 id="status-title">Status</h2>
+      <div id="tiles" class="tiles"></div>
+    </section>
+    <section class="card" aria-labelledby="usage-title">
+      <h2 id="usage-title">Usage</h2>
+      <p class="muted" id="usage-note">Since the service started.</p>
+      <table id="usage" hidden>
+        <thead><tr><th>User</th><th class="num">Calls</th><th class="num">Errors</th><th class="num">Average (ms)</th><th>Last call</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+    <section class="card" aria-labelledby="backends-title">
+      <h2 id="backends-title">Model services</h2>
+      <p class="muted">Where this service sends its model work. A change applies to the next call. The token is stored on this host and never shown again.</p>
+      <div id="slots"></div>
+    </section>
+    <section class="card" aria-labelledby="settings-title">
+      <h2 id="settings-title">Settings</h2>
+      <p class="muted">A value saved here beats the environment variable. Reset goes back to it. Options marked restart apply after the service restarts.</p>
+      <form id="form">
+        <div id="list"></div>
+        <div class="row"><button class="primary" id="save">Save changes</button></div>
+      </form>
+      <p id="note" class="note" role="status"></p>
+    </section>
+  </div>
   <p id="error" class="error" role="alert"></p>
 </main>
 <script>
 const $ = id => document.getElementById(id);
-let password = "", rows = [], noteTimer;
+let password = "", rows = [], noteTimer, refreshTimer;
 try { password = sessionStorage.getItem("admin") || ""; } catch {}
 
-async function call(method, values) {
+async function call(path, method = "GET", body) {
   let response;
   try {
-    response = await fetch("settings", {
+    response = await fetch(path, {
       method, headers: {"X-Admin-Password": password, "Content-Type": "application/json"},
-      body: values ? JSON.stringify({values}) : undefined, signal: AbortSignal.timeout(10000)
+      body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(15000)
     });
   } catch { throw new Error("Could not reach the service."); }
   const data = await response.json().catch(() => ({}));
@@ -86,16 +129,116 @@ async function call(method, values) {
   }
   return data;
 }
+function el(tag, props = {}, ...children) {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children);
+  return node;
+}
+function fail(error) {
+  if (error.status === 401) {
+    password = ""; clearInterval(refreshTimer);
+    try { sessionStorage.removeItem("admin"); } catch {}
+    $("panel").hidden = true; $("signout").hidden = true; $("signin").hidden = false;
+  }
+  $("error").textContent = error.message;
+}
+function name(service) {
+  $("title").textContent = service + " admin";
+  document.title = service + " admin";
+}
+
+/* Status and usage */
+function duration(seconds) {
+  const d = Math.floor(seconds / 86400), h = Math.floor(seconds % 86400 / 3600), m = Math.floor(seconds % 3600 / 60);
+  return d ? d + " d " + h + " h" : h ? h + " h " + m + " min" : m ? m + " min" : seconds + " s";
+}
+function ago(epoch) {
+  const s = Math.max(0, Math.round(Date.now() / 1000 - epoch));
+  return s < 60 ? "just now" : duration(s) + " ago";
+}
+function showStatus(data) {
+  name(data.service);
+  const u = data.usage;
+  const tiles = [...data.items, {label: "Running for", value: duration(u.uptime_s)}, {label: "Calls", value: String(u.calls)},
+    {label: "Errors", value: String(u.errors)}, {label: "Average call (ms)", value: String(u.avg_ms)}];
+  $("tiles").replaceChildren(...tiles.map(t => el("div", {className: "tile"}, el("b", {textContent: t.value}), el("span", {textContent: t.label}))));
+  const body = $("usage").tBodies[0];
+  body.replaceChildren(...u.users.map(row => {
+    const tr = el("tr");
+    tr.append(el("td", {textContent: row.user}), el("td", {className: "num", textContent: row.calls}),
+      el("td", {className: "num", textContent: row.errors}), el("td", {className: "num", textContent: row.avg_ms}),
+      el("td", {textContent: ago(row.last_at)}));
+    return tr;
+  }));
+  $("usage").hidden = !u.users.length;
+  $("usage-note").textContent = u.users.length ? "Since the service started (counts restart with it)." : "No calls since the service started.";
+}
+
+/* Model services */
+function slotCard(slot) {
+  const id = "slot-" + slot.key;
+  const mode = el("select", {id: id + "-mode"});
+  if (slot.local) mode.append(el("option", {value: "local", textContent: "In this service"}));
+  mode.append(el("option", {value: "remote", textContent: "A model service"}));
+  mode.value = slot.mode;
+  const url = el("input", {id: id + "-url", type: "url", value: slot.url, placeholder: slot.example, autocomplete: "off", spellcheck: false});
+  const token = el("input", {id: id + "-token", type: "password", autocomplete: "new-password",
+    placeholder: slot.token_set ? "Saved. Type a new one to replace it." : "No token saved"});
+  const result = el("p", {className: "result", role: "status"});
+  const sync = () => { url.disabled = token.disabled = mode.value === "local"; };
+  mode.onchange = sync; sync();
+
+  const run = async (button, work) => {
+    button.disabled = true; result.className = "result"; result.textContent = ""; $("error").textContent = "";
+    try { await work(); } catch (error) { fail(error); }
+    finally { button.disabled = false; }
+  };
+  const values = () => ({url: mode.value === "local" ? "" : url.value.trim()});
+  const save = el("button", {type: "button", className: "primary small", textContent: "Save"});
+  save.onclick = () => run(save, async () => {
+    const body = values();
+    if (token.value) body.token = token.value;
+    show(await call("backends/" + slot.key, "PUT", body));
+    flash("Saved " + slot.label);
+  });
+  const test = el("button", {type: "button", className: "small", textContent: "Test connection"});
+  test.onclick = () => run(test, async () => {
+    const body = values();
+    if (token.value) body.token = token.value;
+    const reply = await call("backends/" + slot.key + "/test", "POST", body);
+    result.className = "result " + (reply.ok ? "ok" : "bad");
+    result.textContent = reply.message;
+  });
+  const actions = el("div", {className: "row"}, save, test);
+  if (slot.token_set && slot.mode === "remote") {
+    const clear = el("button", {type: "button", className: "small", textContent: "Clear token"});
+    clear.onclick = () => run(clear, async () => { show(await call("backends/" + slot.key, "PUT", {url: url.value.trim(), token: ""})); flash("Token cleared"); });
+    actions.append(clear);
+  }
+  if (slot.source === "saved") {
+    const reset = el("button", {type: "button", className: "small", textContent: "Use the environment value"});
+    reset.onclick = () => run(reset, async () => { show(await call("backends/" + slot.key, "DELETE")); flash("Back to the environment value"); });
+    actions.append(reset);
+  }
+  return el("div", {className: "slot"},
+    el("h3", {textContent: slot.label, style: "margin:0;font-size:1em"}),
+    el("small", {textContent: slot.help + " · From " + slot.source}),
+    el("div", {className: "field"}, el("label", {htmlFor: mode.id, textContent: "Runs"}), mode),
+    el("div", {className: "field"}, el("label", {htmlFor: url.id, textContent: "Address"}), url),
+    el("div", {className: "field"}, el("label", {htmlFor: token.id, textContent: "Token"}), token),
+    actions, result);
+}
 function show(data) {
+  name(data.service);
+  $("slots").replaceChildren(...data.backends.map(slotCard));
+}
+
+/* Settings */
+function showSettings(data) {
   rows = data.settings;
-  $("title").textContent = data.service + " settings";
-  document.title = data.service + " settings";
-  $("signin").hidden = true;
-  $("panel").hidden = false;
   $("list").replaceChildren(...rows.map(row => {
-    const box = document.createElement("div"), top = document.createElement("div");
-    const label = document.createElement("label"), input = document.createElement("input"), help = document.createElement("small");
-    box.className = "setting"; top.className = "top";
+    const box = el("div", {className: "setting"}), top = el("div", {className: "top"});
+    const label = el("label"), input = el("input"), help = el("small");
     input.id = "s-" + row.key; label.htmlFor = input.id; label.textContent = row.label;
     if (row.kind === "bool") { input.type = "checkbox"; input.checked = !!row.value; }
     else if (row.kind === "text") { input.type = "text"; input.value = row.value; input.autocomplete = "off"; }
@@ -107,10 +250,9 @@ function show(data) {
     help.textContent = [row.help, "From " + row.source + (row.restart ? " · applies after a restart" : "")].filter(Boolean).join(" · ");
     top.append(label);
     if (row.source === "saved") {
-      const reset = document.createElement("button");
-      reset.type = "button"; reset.className = "small"; reset.textContent = "Reset";
+      const reset = el("button", {type: "button", className: "small", textContent: "Reset"});
       reset.setAttribute("aria-label", "Reset " + row.label);
-      reset.onclick = () => save({[row.key]: null});
+      reset.onclick = () => saveSettings({[row.key]: null});
       top.append(reset);
     }
     box.append(top, input, help);
@@ -123,32 +265,33 @@ function value(row) {
   if (row.kind === "text") return input.value.trim();
   return input.value === "" ? null : Number(input.value);
 }
-function fail(error) {
-  if (error.status === 401) {
-    password = "";
-    try { sessionStorage.removeItem("admin"); } catch {}
-    $("panel").hidden = true;
-    $("signin").hidden = false;
-  }
-  $("error").textContent = error.message;
+function flash(text) {
+  $("note").textContent = text;
+  clearTimeout(noteTimer);
+  noteTimer = setTimeout(() => { $("note").textContent = ""; }, 3000);
 }
-async function save(values) {
+async function saveSettings(values) {
   $("error").textContent = ""; $("note").textContent = "";
   $("save").disabled = true;
-  try {
-    show(await call("PUT", values));
-    $("note").textContent = "Saved";
-    clearTimeout(noteTimer);
-    noteTimer = setTimeout(() => { $("note").textContent = ""; }, 3000);
-  } catch (error) { fail(error); }
+  try { showSettings(await call("settings", "PUT", {values})); flash("Saved"); }
+  catch (error) { fail(error); }
   finally { $("save").disabled = false; }
+}
+
+/* Sign in and refresh */
+async function refreshStatus() {
+  try { showStatus(await call("status")); } catch (error) { fail(error); }
 }
 async function open(candidate) {
   password = candidate; $("error").textContent = "";
   try {
-    show(await call("GET"));
+    const [status, backends, settings] = await Promise.all([call("status"), call("backends"), call("settings")]);
+    showStatus(status); show(backends); showSettings(settings);
+    $("signin").hidden = true; $("panel").hidden = false; $("signout").hidden = false;
     try { sessionStorage.setItem("admin", password); } catch {}
     $("password").value = "";
+    clearInterval(refreshTimer);
+    refreshTimer = setInterval(() => { if (!document.hidden) refreshStatus(); }, 10000);
   } catch (error) { fail(error); }
 }
 $("login").onsubmit = event => { event.preventDefault(); open($("password").value); };
@@ -159,12 +302,13 @@ $("form").onsubmit = event => {
     const next = value(row);
     if (next !== null && next !== row.value) values[row.key] = next;
   }
-  if (Object.keys(values).length) save(values); else $("note").textContent = "Nothing changed";
+  if (Object.keys(values).length) saveSettings(values); else flash("Nothing changed");
 };
 $("signout").onclick = () => {
-  password = "";
+  password = ""; clearInterval(refreshTimer);
   try { sessionStorage.removeItem("admin"); } catch {}
-  $("panel").hidden = true; $("signin").hidden = false; $("list").replaceChildren();
+  $("panel").hidden = true; $("signout").hidden = true; $("signin").hidden = false;
+  $("list").replaceChildren(); $("slots").replaceChildren(); $("tiles").replaceChildren();
 };
 if (password) open(password);
 </script>

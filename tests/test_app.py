@@ -120,3 +120,25 @@ def test_admin_upload_limit_applies_without_restart(settings):
     assert c.post("/api/files", content=audio(1.0), headers=ANN).status_code == 200
     assert c.put("/admin/settings", json={"values": {"max_upload_mb": 1}}, headers=AUTH).status_code == 200
     assert c.post("/api/files", content=b"" * (2 * 1024 * 1024), headers=ANN).status_code == 413
+
+
+def test_the_admin_page_shows_status_usage_and_the_whisper_slot(settings):
+    c = make(settings, admin_password="pw")
+    pw = {"X-Admin-Password": "pw"}
+    assert c.get("/admin/status").status_code == 401
+    c.post("/api/transcribe", content=audio(), headers=ANN)
+    c.post("/api/transcribe", content=audio(), headers=ANN)
+    body = c.get("/admin/status", headers=pw).json()
+    assert body["usage"]["calls"] == 2 and body["usage"]["users"][0]["user"] == "ann"
+    assert {"label": "Speech model runs", "value": "in this process"} in body["items"]
+    slots = c.get("/admin/backends", headers=pw).json()["backends"]
+    assert [(s["key"], s["mode"]) for s in slots] == [("whisper", "local")]
+    saved = c.put("/admin/backends/whisper", headers=pw, json={"url": "http://w:9230", "token": "t"}).json()["backends"][0]
+    assert saved["mode"] == "remote" and saved["token_set"] is True
+    assert {"label": "Speech model runs", "value": "in a model service"} in c.get("/admin/status", headers=pw).json()["items"]
+
+
+def test_the_slot_starts_from_scribe_whisper_url(settings):
+    c = make(settings, admin_password="pw", whisper_url="http://env:9230", whisper_token="x")
+    slot = c.get("/admin/backends", headers={"X-Admin-Password": "pw"}).json()["backends"][0]
+    assert (slot["mode"], slot["url"], slot["source"]) == ("remote", "http://env:9230", "environment")

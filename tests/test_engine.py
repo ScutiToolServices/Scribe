@@ -1,4 +1,5 @@
 import shutil
+from pathlib import Path
 import subprocess
 import asyncio
 
@@ -6,7 +7,7 @@ import pytest
 
 import httpx
 
-from src.engine import PCM_BYTES_PER_SECOND, HttpWhisperEngine, WhisperEngine
+from src.engine import PCM_BYTES_PER_SECOND, RoutedEngine, WhisperEngine, probe_whisper
 from src.errors import AudioRejected, EngineFailed
 
 needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not on PATH")
@@ -73,13 +74,19 @@ async def test_decode_timeout_and_cancel_kill_and_reap_process(tmp_path, monkeyp
     assert process.killed.is_set() and process.reaped
 
 
+def routed(url, token):
+    return RoutedEngine(WhisperEngine(Path("."), "base.en", "ffmpeg"), lambda: (url, token))
+
+
+REAL_CLIENT = httpx.AsyncClient  # captured at import: remote() may run twice in one test
+
+
 def remote(monkeypatch, handler):
-    """HttpWhisperEngine's per-call client, answered by `handler` instead of the network."""
-    real = httpx.AsyncClient
-    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: real(transport=httpx.MockTransport(handler), **kwargs))
+    """RoutedEngine's per-call client, answered by `handler` instead of the network."""
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: REAL_CLIENT(transport=httpx.MockTransport(handler), **kwargs))
 
 
-async def test_http_engine_posts_pcm_with_the_token_and_maps_the_reply(monkeypatch):
+async def test_routed_engine_posts_pcm_with_the_token_and_maps_the_reply(monkeypatch):
     seen = {}
 
     def handler(request):
@@ -91,7 +98,7 @@ async def test_http_engine_posts_pcm_with_the_token_and_maps_the_reply(monkeypat
         })
 
     remote(monkeypatch, handler)
-    engine = HttpWhisperEngine("http://whisper:9230/", "whisper_x", "base.en", "ffmpeg")
+    engine = routed("http://whisper:9230", "whisper_x")
     transcript = await engine.transcribe(b"\0\0" * 10)
     assert seen == {"url": "http://whisper:9230/v1/transcribe?language=en&beam_size=1&word_timestamps=true",
                     "token": "whisper_x", "size": 20}
@@ -104,17 +111,49 @@ async def test_http_engine_posts_pcm_with_the_token_and_maps_the_reply(monkeypat
     httpx.Response(429, json={"detail": "busy"}), httpx.Response(500, text="boom at /secret/path"),
     httpx.Response(200, text="not json"), httpx.Response(200, json={"text": "no segments"}),
 ])
-async def test_http_engine_failures_are_one_safe_message(monkeypatch, answer):
+async def test_routed_engine_failures_are_one_safe_message(monkeypatch, answer):
     remote(monkeypatch, lambda request: answer)
     with pytest.raises(EngineFailed) as raised:
-        await HttpWhisperEngine("http://whisper:9230", "", "base.en", "ffmpeg").transcribe(b"\0\0")
+        await routed("http://whisper:9230", "").transcribe(b"\0\0")
     assert str(raised.value) == "Transcription failed. Try again." and "secret" not in str(raised.value)
 
 
-async def test_http_engine_unreachable_service_is_engine_failed(monkeypatch):
+async def test_routed_engine_unreachable_service_is_engine_failed(monkeypatch):
     def refuse(request):
         raise httpx.ConnectError("connection refused to http://whisper:9230")
 
     remote(monkeypatch, refuse)
     with pytest.raises(EngineFailed):
-        await HttpWhisperEngine("http://whisper:9230", "", "base.en", "ffmpeg").transcribe(b"\0\0")
+        await routed("http://whisper:9230", "").transcribe(b"\0\0")
+
+
+async def test_the_slot_is_read_on_every_call_and_empty_means_the_local_engine(monkeypatch):
+    class Local(WhisperEngine):
+        async def transcribe(self, pcm):
+            return "local"
+
+    slot = {"now": None}
+    engine = RoutedEngine(Local(Path("."), "small.en", "ffmpeg"), lambda: slot["now"])
+    assert engine.model_name == "small.en" and not engine.is_remote and await engine.transcribe(b"\0\0") == "local"
+    remote(monkeypatch, lambda request: httpx.Response(200, json={"text": "far", "language": "en", "segments": [], "words": []}))
+    slot["now"] = ("http://whisper:9230", "t")
+    assert engine.is_remote and (await engine.transcribe(b"\0\0")).text == "far"
+    slot["now"] = None
+    assert await engine.transcribe(b"\0\0") == "local"
+
+
+async def test_probe_whisper_checks_health_then_sends_the_token_with_a_little_silence(monkeypatch):
+    seen = []
+
+    def handler(request):
+        seen.append((request.method, request.url.path, request.headers.get("X-Internal-Token"), len(request.content)))
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok"})
+        return httpx.Response(200, json={"text": "", "model": "base.en", "segments": [], "words": []})
+
+    remote(monkeypatch, handler)
+    assert await probe_whisper("http://w:9230", "tok") == "Connected, token accepted, model base.en."
+    assert seen == [("GET", "/health", None, 0), ("POST", "/v1/transcribe", "tok", 3200)]
+    remote(monkeypatch, lambda request: httpx.Response(200, json={"status": "ok"}))
+    with pytest.raises(Exception, match="not a WhisperModel service"):
+        await probe_whisper("http://w:9230", "tok")
