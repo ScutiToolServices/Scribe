@@ -21,7 +21,7 @@ from starlette.routing import Mount, WebSocketRoute
 
 from src.config import PROJECT_DIR, Settings
 from src.contract import TranscribeResult
-from src.engine import SttEngine, WhisperEngine
+from src.engine import HttpWhisperEngine, SttEngine, WhisperEngine
 from src.errors import AudioRejected, EngineFailed, IdentityRequired, QuotaExceeded, ScribeError
 from src.identity import owner_from_context
 from src.middleware import InternalTokenMiddleware
@@ -44,6 +44,12 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
     changeable on /admin/ while running; without it they stay as the environment set them."""
     config = config if config is not None else make_config(settings)
     base, settings = settings, live(settings, config)
+    if engine is None and base.whisper_url:
+        engine = HttpWhisperEngine(
+            base.whisper_url, base.whisper_token, settings.model, lambda: settings.ffmpeg,
+            max_seconds=lambda: settings.max_seconds, decode_timeout_s=lambda: settings.timeout_s,
+            timeout_s=lambda: settings.timeout_s + 5,
+        )
     engine = engine or WhisperEngine(
         base.models_dir, settings.model, lambda: settings.ffmpeg,
         max_seconds=lambda: settings.max_seconds, decode_timeout_s=lambda: settings.timeout_s,

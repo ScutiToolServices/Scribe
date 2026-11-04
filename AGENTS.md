@@ -6,7 +6,7 @@ Speech-to-text MCP server for Citadel and Ember. A standalone service on port 80
 This file is the one instruction file for every coding agent; `CLAUDE.md` only imports it (`@AGENTS.md`). Edit this file, never `CLAUDE.md`.
 
 ## Commands (from this folder, venv `.venv`, managed by uv)
-- Install: `uv sync` (`python -m pip install uv` if missing; on this machine set `UV_CACHE_DIR=D:/User/.uv-cache`)
+- Install: `uv sync` (`winget install astral-sh.uv` if missing; on this machine set `UV_CACHE_DIR=D:/User/.uv-cache`)
 - Test: `uv run pytest -q`
 - Run: `uv run python -m src.run` (the model downloads into `.data/models` on first transcription)
 - Benchmark: `uv run python scripts/bench.py <audio file>`
@@ -25,3 +25,4 @@ This file is the one instruction file for every coding agent; `CLAUDE.md` only i
 - Live settings: `SCRIBE_STREAM_CAPACITY=2` (independent WS and fallback HTTP admission pools), `SCRIBE_STREAM_MAX_FRAME_BYTES=64000`, `SCRIBE_STREAM_IDLE_S=15`, `SCRIBE_STREAM_WINDOW_S=30`. Audio is capped at min(150, SCRIBE_MAX_SECONDS); wall deadline adds SCRIBE_TIMEOUT_S. LocalAgreement commits consecutive word matches with timestamps and trims PCM; no agreement at the window bound returns an error. Runtime WS queue is four frames.
 - Whisper decoding limits ffmpeg output to the audio limit plus one second, rejects oversize PCM, and kills/reaps ffmpeg on cancellation or SCRIBE_TIMEOUT_S decode timeout. Keep this bound before any compressed upload is decoded into memory.
 - Runtime settings: with `SCRIBE_ADMIN_PASSWORD` set, `/admin/` (page in `web/`, API `/admin/settings`, header `X-Admin-Password`) edits the options in `options.py`; they are saved to `.data/settings.json` and win over `.env`. `src/runtime.py` is shared with Bard and copies Laya's `settings.py`: keep the copies in step. Live options are read through `LiveSettings`; `restart=True` ones (model, concurrency, stream capacity, frame size) apply at the next start. Without the password the page is off and nothing is changeable. `INTERNAL_API_TOKEN` does not guard `/admin`.
+- Model location: with `SCRIBE_WHISPER_URL` set, `HttpWhisperEngine` (in `src/engine.py`) posts PCM to the `AI/ModelServices/WhisperModel` service (`SCRIBE_WHISPER_TOKEN` as `X-Internal-Token`) and ffmpeg decoding stays here; empty = faster-whisper in this process. `SCRIBE_MODEL` must match the remote model (it keys the transcript cache). Remote failures all become `EngineFailed("Transcription failed. Try again.")`. The admin `model` option has no effect in remote mode.
