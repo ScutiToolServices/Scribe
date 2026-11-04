@@ -118,7 +118,7 @@ class WhisperEngine:
 
 
 async def remote_transcribe(url: str, token: str, pcm: bytes, timeout_s: float) -> Transcript:
-    """POST the PCM to a WhisperModel service. Every failure is one safe message (httpx, JSON and shape errors vary and
+    """POST the PCM to a STTWhisperModel service. Every failure is one safe message (httpx, JSON and shape errors vary and
     may hold URLs)."""
     params = {"language": "en", "beam_size": 1, "word_timestamps": "true"}
     try:
@@ -138,18 +138,18 @@ async def remote_transcribe(url: str, token: str, pcm: bytes, timeout_s: float) 
 
 
 async def probe_whisper(url: str, token: str) -> str:
-    """The admin page's Test button for a WhisperModel address: reachable, then the token on a tenth of a second of silence."""
+    """The admin page's Test button for a STTWhisperModel address: reachable, then the token on a tenth of a second of silence."""
     await check(url, "", "/health")
     reply = await check(url, token, "/v1/transcribe", method="POST", content=b"\0\0" * 1600,
                         params={"language": "en", "word_timestamps": "false"})
     try:
         return f"Connected, token accepted, model {reply.json()['model']}."
     except (ValueError, KeyError, TypeError):
-        raise ProbeError("That address is not a WhisperModel service.") from None
+        raise ProbeError("That address is not a STTWhisperModel service.") from None
 
 
 class RoutedEngine:
-    """The WhisperModel service at the "whisper" slot when it has an address (admin page or SCRIBE_WHISPER_URL),
+    """The STTWhisperModel service at the "whisper" slot when it has an address (admin page or SCRIBE_WHISPER_URL),
     otherwise `local`, faster-whisper in this process. ffmpeg decoding stays here either way. The slot is read on every
     call, so a change on the admin page applies to the next transcription.
 

@@ -155,5 +155,5 @@ async def test_probe_whisper_checks_health_then_sends_the_token_with_a_little_si
     assert await probe_whisper("http://w:9230", "tok") == "Connected, token accepted, model base.en."
     assert seen == [("GET", "/health", None, 0), ("POST", "/v1/transcribe", "tok", 3200)]
     remote(monkeypatch, lambda request: httpx.Response(200, json={"status": "ok"}))
-    with pytest.raises(Exception, match="not a WhisperModel service"):
+    with pytest.raises(Exception, match="not a STTWhisperModel service"):
         await probe_whisper("http://w:9230", "tok")

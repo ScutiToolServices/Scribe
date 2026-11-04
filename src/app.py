@@ -152,7 +152,7 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
 
     if config is not None:
         register(mcp, service="Scribe", admin_password=base.admin_password, usage=usage, backends=backends, status=status, slots=[
-            Slot("whisper", "Speech to text", "Local runs faster-whisper inside Scribe. A model service is a WhisperModel address; "
+            Slot("whisper", "Speech to text", "Local runs faster-whisper inside Scribe. A model service is a STTWhisperModel address; "
                  "its model must match Scribe's model option, which keys the transcript cache.", probe_whisper, "http://127.0.0.1:9230"),
         ])
 
