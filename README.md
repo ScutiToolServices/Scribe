@@ -21,3 +21,12 @@ Speech to text for Citadel and Ember. A user attaches an English audio file (mp3
 A plain publish (`tools\deploy.bat` option 1) only updates the `live` branch, so it is fine for test deploys. A release is a separate step: set `VERSION` (and `pyproject.toml` where it has a version, to the same number), commit, then run `tools\deploy.bat` option R or `py tools\publish_live.py --release`. That publishes to `live` and tags the `main` commit `vX.Y.Z` and the live commit `live-vX.Y.Z`. A version already released with different live files is refused, so bump `VERSION`. While a version is not officially released yet, add `--replace` to move its tags.
 
 `tools\make_zip.bat` then builds `zip_versions\Scribe-<VERSION>.zip` (no `tools/`, no git-ignored files, no older ZIPs; `.env.example` is included) and opens GitHub's new-release page for the tag.
+
+## Admin page
+
+With `SCRIBE_ADMIN_PASSWORD` set, `/admin/` (header `X-Admin-Password`) has four parts:
+
+- **Status**: what the service runs and for how long, plus the model and where it runs.
+- **Usage**: calls, errors and average time per user since the service started (kept in memory, so a restart clears it).
+- **Model services**: speech to text runs in Scribe or at a `WhisperModel` address (`SCRIBE_WHISPER_URL`, `SCRIBE_WHISPER_TOKEN` are only the starting values). Keep `SCRIBE_MODEL` equal to the model the service runs: it keys the transcript cache. Pick **In this service** or **A model service**, set the address and token, press **Test connection** (it calls the other service with that token), then **Save**. A change applies to the next call; the token is stored in `.data/backends.json`, never shown again, and `Use the environment value` drops the saved one.
+- **Settings**: the options saved in `.data/settings.json`.

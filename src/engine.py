@@ -10,6 +10,7 @@ from typing import Protocol
 
 import httpx
 
+from src.admin_api import ProbeError, check
 from src.errors import AudioRejected, EngineFailed
 from src.runtime import as_getter
 
@@ -116,36 +117,62 @@ class WhisperEngine:
             raise EngineFailed("Transcription failed. Try again.") from error
 
 
-class HttpWhisperEngine(WhisperEngine):
-    """Same ffmpeg decoding as WhisperEngine, but the model is the WhisperModel service (AI/ModelServices/WhisperModel):
-    PCM goes to `POST {url}/v1/transcribe`. `model_name` is the configured name, so it must match the service's model;
-    cached transcripts are keyed by it.
+async def remote_transcribe(url: str, token: str, pcm: bytes, timeout_s: float) -> Transcript:
+    """POST the PCM to a WhisperModel service. Every failure is one safe message (httpx, JSON and shape errors vary and
+    may hold URLs)."""
+    params = {"language": "en", "beam_size": 1, "word_timestamps": "true"}
+    try:
+        async with httpx.AsyncClient(timeout=timeout_s) as http:
+            reply = await http.post(url + "/v1/transcribe", params=params, content=pcm,
+                                    headers={"X-Internal-Token": token} if token else {})
+        reply.raise_for_status()
+        body = reply.json()
+        return Transcript(
+            body["text"],
+            [Segment(s["start_s"], s["end_s"], s["text"]) for s in body["segments"]],
+            body["language"],
+            [Segment(w["start_s"], w["end_s"], w["text"]) for w in body["words"]],
+        )
+    except Exception as error:
+        raise EngineFailed("Transcription failed. Try again.") from error
 
-    shortcut: one new connection per call (localhost, a few calls a second at most), upgrade to a shared client if
-    dictation latency shows it."""
 
-    def __init__(
-        self, url: str, token: str, model_name: str, ffmpeg: str | Callable[[], str],
-        max_seconds: float | Callable[[], float] = 150, decode_timeout_s: float | Callable[[], float] = 110,
-        timeout_s: float | Callable[[], float] = 115,
-    ) -> None:
-        super().__init__(Path("."), model_name, ffmpeg, max_seconds, decode_timeout_s)
-        self._url = url.rstrip("/") + "/v1/transcribe"
-        self._headers = {"X-Internal-Token": token} if token else {}
-        self._timeout_s = as_getter(timeout_s)
+async def probe_whisper(url: str, token: str) -> str:
+    """The admin page's Test button for a WhisperModel address: reachable, then the token on a tenth of a second of silence."""
+    await check(url, "", "/health")
+    reply = await check(url, token, "/v1/transcribe", method="POST", content=b"\0\0" * 1600,
+                        params={"language": "en", "word_timestamps": "false"})
+    try:
+        return f"Connected, token accepted, model {reply.json()['model']}."
+    except (ValueError, KeyError, TypeError):
+        raise ProbeError("That address is not a WhisperModel service.") from None
+
+
+class RoutedEngine:
+    """The WhisperModel service at the "whisper" slot when it has an address (admin page or SCRIBE_WHISPER_URL),
+    otherwise `local`, faster-whisper in this process. ffmpeg decoding stays here either way. The slot is read on every
+    call, so a change on the admin page applies to the next transcription.
+
+    `model_name` is the local engine's configured name, so it must match the model the service runs; cached transcripts
+    are keyed by it."""
+
+    def __init__(self, local: WhisperEngine, slot: Callable[[], tuple[str, str] | None],
+                 timeout_s: float | Callable[[], float] = 115) -> None:
+        self._local, self._slot, self._timeout_s = local, slot, as_getter(timeout_s)
+
+    @property
+    def model_name(self) -> str:
+        return self._local.model_name
+
+    @property
+    def is_remote(self) -> bool:
+        return self._slot() is not None
+
+    async def decode(self, path: Path) -> bytes:
+        return await self._local.decode(path)
 
     async def transcribe(self, pcm: bytes) -> Transcript:
-        params = {"language": "en", "beam_size": 1, "word_timestamps": "true"}
-        try:
-            async with httpx.AsyncClient(timeout=self._timeout_s()) as http:
-                reply = await http.post(self._url, params=params, content=pcm, headers=self._headers)
-            reply.raise_for_status()
-            body = reply.json()
-            return Transcript(
-                body["text"],
-                [Segment(s["start_s"], s["end_s"], s["text"]) for s in body["segments"]],
-                body["language"],
-                [Segment(w["start_s"], w["end_s"], w["text"]) for w in body["words"]],
-            )
-        except Exception as error:  # httpx, JSON and shape errors vary; never leak their text (may hold URLs)
-            raise EngineFailed("Transcription failed. Try again.") from error
+        remote = self._slot()
+        if remote is None:
+            return await self._local.transcribe(pcm)
+        return await remote_transcribe(remote[0], remote[1], pcm, self._timeout_s())

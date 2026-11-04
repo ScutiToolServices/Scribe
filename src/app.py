@@ -21,7 +21,8 @@ from starlette.routing import Mount, WebSocketRoute
 
 from src.config import PROJECT_DIR, Settings
 from src.contract import TranscribeResult
-from src.engine import HttpWhisperEngine, SttEngine, WhisperEngine
+from src.admin_api import Backends, Slot, Usage, register
+from src.engine import RoutedEngine, SttEngine, WhisperEngine, probe_whisper
 from src.errors import AudioRejected, EngineFailed, IdentityRequired, QuotaExceeded, ScribeError
 from src.identity import owner_from_context
 from src.middleware import InternalTokenMiddleware
@@ -44,15 +45,14 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
     changeable on /admin/ while running; without it they stay as the environment set them."""
     config = config if config is not None else make_config(settings)
     base, settings = settings, live(settings, config)
-    if engine is None and base.whisper_url:
-        engine = HttpWhisperEngine(
-            base.whisper_url, base.whisper_token, settings.model, lambda: settings.ffmpeg,
+    backends = Backends(base.data_dir / "backends.json", {"whisper": {"url": base.whisper_url, "token": base.whisper_token}})
+    usage = Usage()
+    engine = engine or RoutedEngine(
+        WhisperEngine(
+            base.models_dir, settings.model, lambda: settings.ffmpeg,
             max_seconds=lambda: settings.max_seconds, decode_timeout_s=lambda: settings.timeout_s,
-            timeout_s=lambda: settings.timeout_s + 5,
-        )
-    engine = engine or WhisperEngine(
-        base.models_dir, settings.model, lambda: settings.ffmpeg,
-        max_seconds=lambda: settings.max_seconds, decode_timeout_s=lambda: settings.timeout_s,
+        ),
+        lambda: backends.get("whisper"), timeout_s=lambda: settings.timeout_s + 5,
     )
     store = AudioStore(base.audio_dir, lambda: settings.ttl_seconds, lambda: settings.quota_bytes)
     store.sweep()
@@ -71,7 +71,9 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
         """Transcribe an attached English audio file to text. The file belongs to the asking user and expires
         after 24 hours. Returns the transcript, the duration and a summary."""
         try:
-            return await service.transcribe(owner_from_context(ctx), file_id, timestamps)
+            owner = owner_from_context(ctx)
+            async with usage.track(owner, "transcribe"):
+                return await service.transcribe(owner, file_id, timestamps)
         except ScribeError as error:
             raise ToolError(str(error)) from error
 
@@ -94,7 +96,8 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
         try:
             stored, expires_at = await service.upload(owner, filename, data)
             if request.url.path == "/api/transcribe":
-                result = await service.transcribe(owner, stored.file_id, False)
+                async with usage.track(owner, "transcribe"):
+                    result = await service.transcribe(owner, stored.file_id, False)
                 return JSONResponse({"text": result.text, "duration_s": result.duration_s})
         except QuotaExceeded as error:
             return JSONResponse({"error": error.code, "message": str(error)}, status_code=413)
@@ -122,7 +125,8 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
                 data.extend(chunk)
                 if len(data) > settings.max_bytes:
                     return JSONResponse({"error": "too_large"}, status_code=413)
-            text, duration = await service.partial(owner, bytes(data))
+            async with usage.track(owner, "partial"):
+                text, duration = await service.partial(owner, bytes(data))
             return JSONResponse({"text": text, "duration_s": duration})
         except QuotaExceeded:
             return JSONResponse({"error": "quota_exceeded", "message": "Your audio storage is full."}, status_code=413)
@@ -134,9 +138,24 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
             service.release_partial()
 
     async def stream(websocket: WebSocket) -> None:
-        await serve_stream(websocket, service, settings)
+        owner = websocket.headers.get("x-requester-username", "").strip()
+        if not owner:  # serve_stream refuses it; nothing to count
+            await serve_stream(websocket, service, settings)
+            return
+        async with usage.track(owner, "dictation"):
+            await serve_stream(websocket, service, settings)
+
+    async def status() -> list[dict[str, str]]:
+        remote = backends.get("whisper")
+        return [{"label": "Model", "value": settings.model},
+                {"label": "Speech model runs", "value": "in a model service" if remote else "in this process"}]
 
     if config is not None:
+        register(mcp, service="Scribe", admin_password=base.admin_password, usage=usage, backends=backends, status=status, slots=[
+            Slot("whisper", "Speech to text", "Local runs faster-whisper inside Scribe. A model service is a WhisperModel address; "
+                 "its model must match Scribe's model option, which keys the transcript cache.", probe_whisper, "http://127.0.0.1:9230"),
+        ])
+
         @mcp.custom_route("/admin/settings", methods=["GET", "PUT"])
         async def admin_settings(request: Request) -> Response:
             given = request.headers.get("x-admin-password", "").encode("utf-8")
