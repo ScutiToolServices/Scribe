@@ -80,6 +80,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     </form>
   </section>
   <div id="panel" hidden>
+    <section id="playground" class="card"></section>
     <section class="card" aria-labelledby="status-title">
       <h2 id="status-title">Status</h2>
       <div id="tiles" class="tiles"></div>
@@ -109,9 +110,10 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   </div>
   <p id="error" class="error" role="alert"></p>
 </main>
+<script src="playground.js"></script>
 <script>
 const $ = id => document.getElementById(id);
-let password = "", rows = [], noteTimer, refreshTimer;
+let password = "", rows = [], noteTimer, refreshTimer, playground;
 try { password = sessionStorage.getItem("admin") || ""; } catch {}
 
 async function call(path, method = "GET", body) {
@@ -137,6 +139,7 @@ function el(tag, props = {}, ...children) {
 }
 function fail(error) {
   if (error.status === 401) {
+    playground?.reset();
     password = ""; clearInterval(refreshTimer);
     try { sessionStorage.removeItem("admin"); } catch {}
     $("panel").hidden = true; $("signout").hidden = true; $("signin").hidden = false;
@@ -158,6 +161,7 @@ function ago(epoch) {
   return s < 60 ? "just now" : duration(s) + " ago";
 }
 function showStatus(data) {
+  if (!playground && data.playground) playground = Playground.mount($("playground"), data.playground, {secrets: () => [password]});
   name(data.service);
   const u = data.usage;
   const tiles = [...data.items, {label: "Running for", value: duration(u.uptime_s)}, {label: "Calls", value: String(u.calls)},
@@ -306,6 +310,7 @@ $("form").onsubmit = event => {
   if (Object.keys(values).length) saveSettings(values); else flash("Nothing changed");
 };
 $("signout").onclick = () => {
+  playground?.reset();
   password = ""; clearInterval(refreshTimer);
   try { sessionStorage.removeItem("admin"); } catch {}
   $("panel").hidden = true; $("signout").hidden = true; $("signin").hidden = false;

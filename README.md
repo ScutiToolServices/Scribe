@@ -2,7 +2,7 @@
 
 Speech to text for Citadel and Ember. A user attaches an English audio file (mp3, wav, m4a, ogg, flac, webm) in chat; the agent calls `scribe__tool_scribe_transcribe` and answers with the transcript. Runs locally with faster-whisper on CPU.
 
-- Upload: `POST /api/files` (raw bytes, `X-Requester-Username`, `X-Filename`), reached only through ember_api.
+- Upload: `POST /api/files` (raw bytes, `X-Requester-Username`, `X-Filename`), used by ember_api and the authenticated admin playground.
 - Tool: `tool_scribe_transcribe(file_id, timestamps=false)` over MCP at `/mcp`.
 - Limits: 25 MB, 150 s of audio, 200 MB per user. Uploads and transcripts are deleted after 24 hours.
 - Run: `uv run python -m src.run` (first `uv sync`). Docker: `docker compose up -d --build` (the Citadel network must exist).
@@ -30,3 +30,10 @@ With `SCRIBE_ADMIN_PASSWORD` set, `/admin/` (header `X-Admin-Password`) has four
 - **Usage**: calls, errors and average time per user since the service started (kept in memory, so a restart clears it).
 - **Model services**: speech to text runs in Scribe or at a `STTWhisperModel` address (`SCRIBE_WHISPER_URL`, `SCRIBE_WHISPER_TOKEN` are only the starting values). Keep `SCRIBE_MODEL` equal to the model the service runs: it keys the transcript cache. Pick **In this service** or **A model service**, set the address and token, press **Test connection** (it calls the other service with that token), then **Save**. A change applies to the next call; the token is stored in `.data/backends.json`, never shown again, and `Use the environment value` drops the saved one.
 - **Settings**: the options saved in `.data/settings.json`.
+
+
+## Try it from the admin page
+
+Open `/admin/` and use **Try it** with the service's internal API token and a requester username. The token is held only in memory, separate from admin sign-in. Requests use the ordinary public API, quotas and cache; the panel shows HTTP status, latency, output, cancellation and curl with a token placeholder. See [the web UI guide](docs/guide-web-ui.md).
+
+Enter the requester username and upload encoded audio. The panel posts its bytes to `POST /api/transcribe` with `X-Requester-Username` and `X-Filename`, then displays the JSON transcript. Scribe keeps its existing ffmpeg decoding, duration/byte caps, per-user quota, cached transcription and retention behavior. This upload playground does not start a live dictation WebSocket.
