@@ -176,3 +176,21 @@ def test_stop_allows_final_inference_after_recording_duration(settings):
         time.sleep(0.08)
         ws.send_json({"type": "stop"})
         assert ws.receive_json() == {"type": "final", "text": "hello world"}
+
+
+def test_audio_is_read_while_a_pass_is_running(settings):
+    release, finished = threading.Event(), threading.Event()
+    class SlowEngine(FakeEngine):
+        async def transcribe(self, pcm):
+            await asyncio.to_thread(release.wait, 5)
+            finished.set()
+            return Transcript("hello world", [], "en")
+    client = TestClient(build_app(replace(settings, stream_max_frame_bytes=32000), SlowEngine()))
+    try:
+        with client.websocket_connect("/api/stream", headers=dict(ANN)) as ws:
+            ws.send_bytes(audio())  # starts a pass that stays blocked in the engine
+            ws.send_bytes(audio(2))  # too large: only answered if the loop still reads while the pass runs
+            assert ws.receive_json() == {"type": "error", "message": "Audio frame is too large."}
+            assert not finished.is_set()  # the engine call is still blocked
+    finally:
+        release.set()

@@ -55,6 +55,14 @@ class LocalAgreement:
         return " ".join([*self._committed, result.text]).strip()
 
 
+async def _cancel(*tasks: asyncio.Task | None) -> None:
+    """Stop what is still pending and collect its result so nothing is left unretrieved."""
+    pending = [t for t in tasks if t is not None]
+    for task in pending:
+        task.cancel()
+    await asyncio.gather(*pending, return_exceptions=True)
+
+
 async def serve_stream(ws: WebSocket, service, settings) -> None:
     owner = ws.headers.get("x-requester-username", "").strip()
     if not owner:
@@ -65,17 +73,37 @@ async def serve_stream(ws: WebSocket, service, settings) -> None:
         await ws.close(code=1013)
         return
     key = object()
+    receiving: asyncio.Task | None = None
+    inflight: asyncio.Task | None = None
     try:
         await service.reserve(key, owner, 0)
         await ws.accept()
         state = LocalAgreement(min(150, settings.max_seconds), settings.stream_window_s)
         last_pass = 0
         deadline = time.monotonic() + min(150, settings.max_seconds) + settings.timeout_s
+
+        async def partial(pcm: bytes) -> None:
+            result = await asyncio.wait_for(service.infer(pcm), max(0.001, deadline - time.monotonic()))
+            await ws.send_json({"type": "partial", "text": state.update(result)})
+
+        # Inference runs beside the receive loop: a slow pass must not stop audio being read, or the
+        # browser's bounded queue overflows and it drops to periodic updates.
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise AudioRejected("Dictation time limit reached.")
-            message = await asyncio.wait_for(ws.receive(), min(settings.stream_idle_s, remaining))
+            receiving = receiving or asyncio.ensure_future(ws.receive())
+            done, _ = await asyncio.wait({receiving, *([inflight] if inflight else [])},
+                                         timeout=min(settings.stream_idle_s, remaining),
+                                         return_when=asyncio.FIRST_COMPLETED)
+            if not done:
+                raise TimeoutError
+            if inflight in done:
+                task, inflight = inflight, None
+                task.result()  # a failed pass ends the stream now, not at the next frame
+            if receiving not in done:
+                continue
+            message, receiving = receiving.result(), None
             if message["type"] == "websocket.disconnect":
                 return
             data = message.get("bytes")
@@ -88,10 +116,9 @@ async def serve_stream(ws: WebSocket, service, settings) -> None:
                     raise AudioRejected("That audio is too large.")
                 await service.reserve(key, owner, state.total_bytes + len(data))
                 state.append(data)
-                if state.total_bytes - last_pass >= PCM_BYTES_PER_SECOND:
-                    result = await asyncio.wait_for(service.infer(state.pcm), max(0.001, deadline - time.monotonic()))
+                if inflight is None and state.total_bytes - last_pass >= PCM_BYTES_PER_SECOND:
                     last_pass = state.total_bytes
-                    await ws.send_json({"type": "partial", "text": state.update(result)})
+                    inflight = asyncio.create_task(partial(state.pcm))
             else:
                 text = message.get("text", "")
                 if len(text) > 256:
@@ -102,6 +129,8 @@ async def serve_stream(ws: WebSocket, service, settings) -> None:
                     raise AudioRejected("Invalid stream command.") from None
                 if not isinstance(command, dict) or command.get("type") != "stop":
                     raise AudioRejected("Invalid stream command.")
+                if inflight is not None:  # let the running pass commit its words before the final one
+                    await asyncio.wait_for(inflight, max(0.001, deadline - time.monotonic()))
                 result = await asyncio.wait_for(service.infer(state.pcm), max(0.001, deadline - time.monotonic())) if state.pcm else Transcript("", [], "en")
                 await ws.send_json({"type": "final", "text": state.finish(result)})
                 await ws.close()
@@ -109,6 +138,7 @@ async def serve_stream(ws: WebSocket, service, settings) -> None:
     except WebSocketDisconnect:
         pass
     except Exception as error:
+        await _cancel(receiving, inflight)  # a pass still sending must not race the error message
         # Neither engine exception text nor temporary file paths cross this boundary.
         message = "Dictation timed out." if isinstance(error, TimeoutError) else "Dictation failed. Try again."
         if isinstance(error, ScribeError):
@@ -119,5 +149,6 @@ async def serve_stream(ws: WebSocket, service, settings) -> None:
         else:
             await ws.close(code=1008)
     finally:
+        await _cancel(receiving, inflight)
         service.unreserve(key)
         service.release_live()
