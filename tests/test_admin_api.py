@@ -1,4 +1,4 @@
-"""Shared by Bard, Scribe and UnlimitedOCR (the same file in all three), like src/admin_api.py."""
+"""Shared by Bard, Scribe and Reader (the same file in all three), like src/admin_api.py."""
 
 import asyncio
 import json

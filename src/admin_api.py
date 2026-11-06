@@ -1,4 +1,4 @@
-"""Admin API shared by the tool services Bard, Scribe and UnlimitedOCR (the same file in all three; change one, copy it
+"""Admin API shared by the tool services Bard, Scribe and Reader (the same file in all three; change one, copy it
 to the others). It adds, next to the existing /admin/settings:
 
   GET  /admin/status               uptime, usage per user, and service-specific items
