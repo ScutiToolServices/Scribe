@@ -149,7 +149,7 @@ async def probe_whisper(url: str, token: str) -> str:
 
 
 class RoutedEngine:
-    """The STTWhisperModel service at the "whisper" slot when it has an address (admin page or SCRIBE_WHISPER_URL),
+    """The STTWhisperModel service at the "whisper" slot when it has an address (saved on the admin page),
     otherwise `local`, faster-whisper in this process. ffmpeg decoding stays here either way. The slot is read on every
     call, so a change on the admin page applies to the next transcription.
 

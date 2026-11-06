@@ -198,7 +198,7 @@ function slotCard(slot) {
   if (slot.local) mode.append(el("option", {value: "local", textContent: "In this service"}));
   for (const c of connections) mode.append(el("option", {value: "c:" + c.name, textContent: c.name}));
   mode.append(el("option", {value: "remote", textContent: "Another address"}));
-  mode.value = slot.connection ? "c:" + slot.connection : slot.mode;
+  mode.value = slot.connection ? "c:" + slot.connection : slot.mode === "local" && !slot.local ? "remote" : slot.mode;
   const url = el("input", {id: id + "-url", type: "url", value: slot.url, placeholder: slot.example, autocomplete: "off", spellcheck: false});
   const token = el("input", {id: id + "-token", type: "password", autocomplete: "new-password",
     placeholder: slot.token_set ? "Saved. Type a new one to replace it." : "No token saved"});

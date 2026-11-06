@@ -137,8 +137,3 @@ def test_the_admin_page_shows_status_usage_and_the_whisper_slot(settings):
     assert saved["mode"] == "remote" and saved["token_set"] is True
     assert {"label": "Speech model runs", "value": "in a model service"} in c.get("/admin/status", headers=pw).json()["items"]
 
-
-def test_the_slot_starts_from_scribe_whisper_url(settings):
-    c = make(settings, admin_password="pw", whisper_url="http://env:9230", whisper_token="x")
-    slot = c.get("/admin/backends", headers={"X-Admin-Password": "pw"}).json()["backends"][0]
-    assert (slot["mode"], slot["url"], slot["source"]) == ("remote", "http://env:9230", "environment")

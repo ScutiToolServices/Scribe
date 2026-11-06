@@ -54,7 +54,7 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
     changeable on /admin/ while running; without it they stay as the environment set them."""
     config = config if config is not None else make_config(settings)
     base, settings = settings, live(settings, config)
-    backends = Backends(base.data_dir / "backends.json", {"whisper": {"url": base.whisper_url, "token": base.whisper_token}})
+    backends = Backends(base.state_dir / "backends.json")
     usage = Usage()
     engine = engine or RoutedEngine(
         WhisperEngine(

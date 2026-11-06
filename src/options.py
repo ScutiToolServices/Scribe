@@ -46,12 +46,15 @@ def schema(base: Settings) -> list[Setting]:
         Setting("stream_idle_s", "Dictation idle timeout (seconds)", "float", base.stream_idle_s, minimum=1, maximum=300),
         Setting("stream_window_s", "Dictation audio window (seconds)", "float", base.stream_window_s, minimum=5, maximum=120),
         Setting("ffmpeg", "ffmpeg program", "text", base.ffmpeg, blank=False, help="A name on PATH or a full path"),
+        Setting("data_path", "Data folder", "text", "", restart=True,
+                help=f"Where stored data (uploaded audio and model files) goes. Empty = {base.state_dir}. Applies after a restart; files already stored are not moved. "
+                     f"Settings and saved model connections stay in the standard folder."),
     ]
 
 
 def make_config(base: Settings) -> Config | None:
     """None, so nothing is changeable at run time, unless SCRIBE_ADMIN_PASSWORD is set."""
-    return Config(base.data_dir / "settings.json", schema(base)) if base.admin_password else None
+    return Config(base.state_dir / "settings.json", schema(base)) if base.admin_password else None
 
 
 def live(base: Settings, config: Config | None):
