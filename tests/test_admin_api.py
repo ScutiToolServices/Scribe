@@ -192,3 +192,58 @@ async def test_check_sends_the_token_and_hides_connection_errors(monkeypatch):
     with pytest.raises(ProbeError, match="Could not reach"):
         await check("http://svc:1", "", "/down")
     assert seen["token"] is None
+
+
+def test_a_slot_can_use_a_saved_connection_shared_with_other_slots(tmp_path):
+    c, _, backends, seen = make(tmp_path)
+    saved = c.put("/admin/connections/gpu box", headers=PW, json={"url": "http://10.0.0.5:9150/", "token": "s3cret"})
+    assert saved.status_code == 200
+    assert saved.json()["connections"] == [{"name": "gpu box", "url": "http://10.0.0.5:9150", "token_set": True, "used_by": []}]
+    assert "s3cret" not in saved.text
+    listing = c.put("/admin/backends/one", headers=PW, json={"connection": "gpu box"}).json()
+    assert listing["backends"][0]["connection"] == "gpu box" and listing["backends"][0]["mode"] == "remote"
+    assert listing["connections"][0]["used_by"] == ["one"]
+    assert backends.get("one") == ("http://10.0.0.5:9150", "s3cret")
+
+
+def test_editing_a_connection_reaches_the_slots_that_use_it_and_keeps_the_token(tmp_path):
+    c, _, backends, _ = make(tmp_path)
+    c.put("/admin/connections/a", headers=PW, json={"url": "http://h1:1", "token": "tok"})
+    c.put("/admin/backends/one", headers=PW, json={"connection": "a"})
+    c.put("/admin/connections/a", headers=PW, json={"url": "http://h2:2"})
+    assert backends.get("one") == ("http://h2:2", "tok")
+
+
+def test_a_connection_in_use_cannot_be_deleted_and_an_unused_one_can(tmp_path):
+    c, _, backends, _ = make(tmp_path)
+    c.put("/admin/connections/a", headers=PW, json={"url": "http://h1:1"})
+    c.put("/admin/backends/one", headers=PW, json={"connection": "a"})
+    assert c.delete("/admin/connections/a", headers=PW).status_code == 409
+    c.put("/admin/backends/one", headers=PW, json={"url": ""})
+    assert c.delete("/admin/connections/a", headers=PW).json()["connections"] == []
+
+
+def test_bad_connection_names_bodies_and_picks_are_refused(tmp_path):
+    c, *_ = make(tmp_path)
+    assert c.put("/admin/connections/_x", headers=PW, json={"url": "http://h:1"}).status_code == 422
+    assert c.put("/admin/connections/a", headers=PW, json={"url": ""}).status_code == 422
+    assert c.put("/admin/connections/a", headers=PW, json={"url": "ftp://h"}).status_code == 422
+    assert c.put("/admin/backends/one", headers=PW, json={"connection": "nope"}).status_code == 422
+    assert c.post("/admin/backends/one/test", headers=PW, json={"connection": "nope"}).status_code == 422
+    for method, path in [("put", "/admin/connections/a"), ("delete", "/admin/connections/a")]:
+        assert getattr(c, method)(path).status_code == 401
+
+
+def test_the_test_button_can_try_a_connection_before_it_is_used(tmp_path):
+    c, _, _, seen = make(tmp_path)
+    c.put("/admin/connections/a", headers=PW, json={"url": "http://h1:1", "token": "tok"})
+    assert c.post("/admin/backends/one/test", headers=PW, json={"connection": "a"}).json()["ok"] is True
+    assert seen == [("http://h1:1", "tok")]
+
+
+def test_a_connection_removed_by_hand_falls_back_to_the_environment(tmp_path):
+    c, _, backends, _ = make(tmp_path, {"one": {"url": "http://env:1", "token": ""}})
+    c.put("/admin/connections/a", headers=PW, json={"url": "http://h1:1"})
+    c.put("/admin/backends/one", headers=PW, json={"connection": "a"})
+    (tmp_path / "backends.json").write_text(json.dumps({"one": {"use": "a"}}), "utf-8")
+    assert backends.get("one") == ("http://env:1", "")

@@ -93,6 +93,17 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
         <tbody></tbody>
       </table>
     </section>
+    <section class="card" aria-labelledby="conn-title">
+      <h2 id="conn-title">Saved connections</h2>
+      <p class="muted">Named model-service addresses. Save them once, then pick one for each model service below. The token is stored on this host and never shown again.</p>
+      <div id="conns"></div>
+      <form id="conn-form" class="slot">
+        <div class="field"><label for="conn-name">Name</label><input id="conn-name" type="text" maxlength="40" autocomplete="off" spellcheck="false" required></div>
+        <div class="field"><label for="conn-url">Address</label><input id="conn-url" type="url" autocomplete="off" spellcheck="false" required></div>
+        <div class="field"><label for="conn-token">Token</label><input id="conn-token" type="password" autocomplete="new-password"></div>
+        <div class="row"><button class="primary small" id="conn-save">Save connection</button></div>
+      </form>
+    </section>
     <section class="card" aria-labelledby="backends-title">
       <h2 id="backends-title">Model services</h2>
       <p class="muted">Where this service sends its model work. A change applies to the next call. The token is stored on this host and never shown again.</p>
@@ -180,17 +191,24 @@ function showStatus(data) {
 }
 
 /* Model services */
+let connections = [];
 function slotCard(slot) {
   const id = "slot-" + slot.key;
   const mode = el("select", {id: id + "-mode"});
   if (slot.local) mode.append(el("option", {value: "local", textContent: "In this service"}));
-  mode.append(el("option", {value: "remote", textContent: "A model service"}));
-  mode.value = slot.mode;
+  for (const c of connections) mode.append(el("option", {value: "c:" + c.name, textContent: c.name}));
+  mode.append(el("option", {value: "remote", textContent: "Another address"}));
+  mode.value = slot.connection ? "c:" + slot.connection : slot.mode;
   const url = el("input", {id: id + "-url", type: "url", value: slot.url, placeholder: slot.example, autocomplete: "off", spellcheck: false});
   const token = el("input", {id: id + "-token", type: "password", autocomplete: "new-password",
     placeholder: slot.token_set ? "Saved. Type a new one to replace it." : "No token saved"});
   const result = el("p", {className: "result", role: "status"});
-  const sync = () => { url.disabled = token.disabled = mode.value === "local"; };
+  const picked = () => mode.value.startsWith("c:") ? mode.value.slice(2) : "";
+  const sync = () => {
+    url.disabled = token.disabled = mode.value !== "remote";
+    const c = connections.find(x => x.name === picked());
+    if (c) url.value = c.url;
+  };
   mode.onchange = sync; sync();
 
   const run = async (button, work) => {
@@ -198,24 +216,24 @@ function slotCard(slot) {
     try { await work(); } catch (error) { fail(error); }
     finally { button.disabled = false; }
   };
-  const values = () => ({url: mode.value === "local" ? "" : url.value.trim()});
+  const values = () => picked() ? {connection: picked()} : {url: mode.value === "local" ? "" : url.value.trim()};
   const save = el("button", {type: "button", className: "primary small", textContent: "Save"});
   save.onclick = () => run(save, async () => {
     const body = values();
-    if (token.value) body.token = token.value;
+    if (token.value && !picked()) body.token = token.value;
     show(await call("backends/" + slot.key, "PUT", body));
     flash("Saved " + slot.label);
   });
   const test = el("button", {type: "button", className: "small", textContent: "Test connection"});
   test.onclick = () => run(test, async () => {
     const body = values();
-    if (token.value) body.token = token.value;
+    if (token.value && !picked()) body.token = token.value;
     const reply = await call("backends/" + slot.key + "/test", "POST", body);
     result.className = "result " + (reply.ok ? "ok" : "bad");
     result.textContent = reply.message;
   });
   const actions = el("div", {className: "row"}, save, test);
-  if (slot.token_set && slot.mode === "remote") {
+  if (slot.token_set && slot.mode === "remote" && !slot.connection) {
     const clear = el("button", {type: "button", className: "small", textContent: "Clear token"});
     clear.onclick = () => run(clear, async () => { show(await call("backends/" + slot.key, "PUT", {url: url.value.trim(), token: ""})); flash("Token cleared"); });
     actions.append(clear);
@@ -235,8 +253,33 @@ function slotCard(slot) {
 }
 function show(data) {
   name(data.service);
+  connections = data.connections || [];
   $("slots").replaceChildren(...data.backends.map(slotCard));
+  $("conns").replaceChildren(...connections.map(c => {
+    const edit = el("button", {type: "button", className: "small", textContent: "Edit"});
+    edit.setAttribute("aria-label", "Edit " + c.name);
+    edit.onclick = () => { $("conn-name").value = c.name; $("conn-url").value = c.url; $("conn-token").value = ""; $("conn-token").placeholder = c.token_set ? "Saved. Type a new one to replace it." : "No token saved"; };
+    const del = el("button", {type: "button", className: "small", textContent: "Delete"});
+    del.setAttribute("aria-label", "Delete " + c.name);
+    del.onclick = async () => {
+      $("error").textContent = "";
+      try { show(await call("connections/" + encodeURIComponent(c.name), "DELETE")); flash("Deleted " + c.name); } catch (error) { fail(error); }
+    };
+    return el("div", {className: "slot"}, el("h3", {textContent: c.name, style: "margin:0;font-size:1em"}),
+      el("small", {textContent: c.url + (c.token_set ? " · token saved" : " · no token") + (c.used_by.length ? " · used by " + c.used_by.join(", ") : "")}),
+      el("div", {className: "row"}, edit, del));
+  }));
 }
+$("conn-form").onsubmit = async event => {
+  event.preventDefault(); $("error").textContent = "";
+  const body = {url: $("conn-url").value.trim()};
+  if ($("conn-token").value) body.token = $("conn-token").value;
+  try {
+    const name = $("conn-name").value.trim();
+    show(await call("connections/" + encodeURIComponent(name), "PUT", body));
+    $("conn-form").reset(); flash("Saved " + name);
+  } catch (error) { fail(error); }
+};
 
 /* Settings */
 function showSettings(data) {
@@ -314,7 +357,7 @@ $("signout").onclick = () => {
   password = ""; clearInterval(refreshTimer);
   try { sessionStorage.removeItem("admin"); } catch {}
   $("panel").hidden = true; $("signout").hidden = true; $("signin").hidden = false;
-  $("list").replaceChildren(); $("slots").replaceChildren(); $("tiles").replaceChildren();
+  $("list").replaceChildren(); $("slots").replaceChildren(); $("conns").replaceChildren(); $("tiles").replaceChildren();
 };
 if (password) open(password);
 </script>

@@ -5,7 +5,10 @@ to the others). It adds, next to the existing /admin/settings:
   GET  /admin/backends             the model-service slots: local or a URL, whether a token is saved (never the token)
   PUT  /admin/backends/{key}       {"url", "token"}: url "" = run it in this service; token omitted = keep the saved one
   DELETE /admin/backends/{key}     forget the saved value, go back to the environment variable
-  POST /admin/backends/{key}/test  {"url", "token"} optional (the form's unsaved values); calls the model service
+  POST /admin/backends/{key}/test  {"url", "token"} or {"connection"} optional (the form's unsaved values); calls the model service
+  PUT  /admin/backends/{key}       also takes {"connection": name}: use a saved connection (see below)
+  PUT  /admin/connections/{name}   {"url", "token"}: save a named model-service address, shared by every slot
+  DELETE /admin/connections/{name} forget it (409 while a slot uses it)
 
 All behind the X-Admin-Password header. Slots are saved in `backends.json` beside the other data, so a change applies to
 the next call without a restart.
@@ -20,6 +23,7 @@ import asyncio
 import hmac
 import json
 import os
+import re
 import time
 from collections import OrderedDict
 from contextlib import asynccontextmanager
@@ -35,6 +39,9 @@ from starlette.responses import JSONResponse, Response
 MAX_USERS = 200
 MAX_URL = 300
 MAX_TOKEN = 500
+MAX_CONNECTIONS = 50
+CONNECTIONS = "_connections"  # reserved key in backends.json: {name: {"url", "token"}}
+NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9 ._-]{0,39}")
 
 
 class ProbeError(Exception):
@@ -117,8 +124,13 @@ class Backends:
 
     def _row(self, key: str) -> tuple[dict[str, str], str]:
         self._load()
-        if key in self._saved:
-            return self._saved[key], "saved"
+        row = self._saved.get(key)
+        if row is not None:
+            use = row.get("use")
+            if use is None:
+                return row, "saved"
+            if isinstance(use, str) and isinstance(self._saved.get(CONNECTIONS, {}).get(use), dict):
+                return self._saved[CONNECTIONS][use], "saved"  # a connection removed by hand falls through
         return self._defaults.get(key, {}), "environment"
 
     def get(self, key: str) -> tuple[str, str] | None:
@@ -133,7 +145,37 @@ class Backends:
     def describe(self, key: str) -> dict[str, Any]:
         row, source = self._row(key)
         url = (row.get("url") or "").strip().rstrip("/")
-        return {"mode": "remote" if url else "local", "url": url, "token_set": bool(row.get("token")), "source": source}
+        use = (self._saved.get(key) or {}).get("use") if source == "saved" else None
+        return {"mode": "remote" if url else "local", "url": url, "token_set": bool(row.get("token")), "source": source,
+                "connection": use if isinstance(use, str) else ""}
+
+    def connections(self) -> list[dict[str, Any]]:
+        self._load()
+        return [{"name": n, "url": r.get("url") or "", "token_set": bool(r.get("token")),
+                 "used_by": [k for k, v in self._saved.items() if k != CONNECTIONS and v.get("use") == n]}
+                for n, r in sorted(self._saved.get(CONNECTIONS, {}).items()) if isinstance(r, dict)]
+
+    def connection(self, name: str) -> tuple[str, str] | None:
+        self._load()
+        row = self._saved.get(CONNECTIONS, {}).get(name)
+        return (row.get("url") or "", row.get("token") or "") if isinstance(row, dict) else None
+
+    def use(self, key: str, name: str) -> None:
+        """Point a slot at a saved connection."""
+        self._load()
+        self._write({**self._saved, key: {"use": name}})
+
+    def save_connection(self, name: str, url: str, token: str | None) -> None:
+        """`token` None keeps the current one; "" clears it."""
+        self._load()
+        known = self._saved.get(CONNECTIONS, {})
+        keep = (known.get(name) or {}).get("token") or ""
+        self._write({**self._saved, CONNECTIONS: {**known, name: {"url": url, "token": keep if token is None else token}}})
+
+    def delete_connection(self, name: str) -> None:
+        self._load()
+        known = {n: r for n, r in self._saved.get(CONNECTIONS, {}).items() if n != name}
+        self._write({**self._saved, CONNECTIONS: known})
 
     def set(self, key: str, url: str, token: str | None) -> None:
         """`token` None keeps the current one; "" clears it."""
@@ -168,6 +210,10 @@ class Slot:
     probe: Callable[[str, str], Awaitable[str]]
     example: str = ""
     local: bool = True
+
+
+async def _unused(url: str, token: str) -> str:
+    raise ProbeError("Not used.")
 
 
 async def check(url: str, token: str, path: str, *, method: str = "GET", **kwargs: Any) -> httpx.Response:
@@ -210,6 +256,9 @@ def register(mcp: Any, *, service: str, admin_password: str, usage: Usage, backe
         return [{"key": s.key, "label": s.label, "help": s.help, "example": s.example, "local": s.local,
                  **backends.describe(s.key)} for s in slots]
 
+    def listing() -> dict[str, Any]:
+        return {"service": service, "backends": describe(), "connections": backends.connections()}
+
     async def body_of(request: Request) -> dict[str, Any]:
         try:
             data = await request.json()
@@ -240,7 +289,7 @@ def register(mcp: Any, *, service: str, admin_password: str, usage: Usage, backe
     async def admin_backends(request: Request) -> Response:
         if (refused := denied(request)) is not None:
             return refused
-        return JSONResponse({"service": service, "backends": describe()})
+        return JSONResponse(listing())
 
     @mcp.custom_route("/admin/backends/{key}", methods=["PUT", "DELETE"])
     async def admin_backend(request: Request) -> Response:
@@ -254,13 +303,43 @@ def register(mcp: Any, *, service: str, admin_password: str, usage: Usage, backe
         else:
             try:
                 data = await body_of(request)
-                if "url" not in data:
-                    raise ValueError("Send {\"url\": text, \"token\": text}.")
-                url, token = cleaned(slot, data)
+                if "connection" in data:
+                    if not isinstance(data["connection"], str) or backends.connection(data["connection"]) is None:
+                        raise ValueError("No such saved connection.")
+                elif "url" not in data:
+                    raise ValueError("Send {\"url\": text, \"token\": text} or {\"connection\": name}.")
+                else:
+                    url, token = cleaned(slot, data)
             except ValueError as error:
                 return JSONResponse({"detail": str(error)}, status_code=422)
-            await asyncio.to_thread(backends.set, slot.key, url, token)
-        return JSONResponse({"service": service, "backends": describe()})
+            if "connection" in data:
+                await asyncio.to_thread(backends.use, slot.key, data["connection"])
+            else:
+                await asyncio.to_thread(backends.set, slot.key, url, token)
+        return JSONResponse(listing())
+
+    @mcp.custom_route("/admin/connections/{name}", methods=["PUT", "DELETE"])
+    async def admin_connection(request: Request) -> Response:
+        if (refused := denied(request)) is not None:
+            return refused
+        name = request.path_params["name"]
+        if request.method == "DELETE":
+            used = next((c["used_by"] for c in backends.connections() if c["name"] == name), [])
+            if used:
+                return JSONResponse({"detail": "A slot still uses that connection: " + ", ".join(used) + "."}, status_code=409)
+            await asyncio.to_thread(backends.delete_connection, name)
+            return JSONResponse(listing())
+        try:
+            if not NAME.fullmatch(name):
+                raise ValueError("The name takes 1 to 40 letters, digits, spaces, dots, dashes or underscores.")
+            data = await body_of(request)
+            url, token = cleaned(Slot("", "A connection", "", _unused, local=False), data)
+            if backends.connection(name) is None and len(backends.connections()) >= MAX_CONNECTIONS:
+                raise ValueError("Too many saved connections.")
+        except ValueError as error:
+            return JSONResponse({"detail": str(error)}, status_code=422)
+        await asyncio.to_thread(backends.save_connection, name, url, token)
+        return JSONResponse(listing())
 
     @mcp.custom_route("/admin/backends/{key}/test", methods=["POST"])
     async def admin_backend_test(request: Request) -> Response:
@@ -270,8 +349,14 @@ def register(mcp: Any, *, service: str, admin_password: str, usage: Usage, backe
         if slot is None:
             return JSONResponse({"detail": "No such model service slot."}, status_code=404)
         data = await body_of(request)
+        picked = data.get("connection")
         try:
-            url, token = cleaned(slot, data) if "url" in data else ((backends.get(slot.key) or ("", ""))[0], None)
+            if "connection" in data:
+                if not isinstance(picked, str) or backends.connection(picked) is None:
+                    raise ValueError("No such saved connection.")
+                url, token = backends.connection(picked)  # type: ignore[misc]
+            else:
+                url, token = cleaned(slot, data) if "url" in data else ((backends.get(slot.key) or ("", ""))[0], None)
         except ValueError as error:
             return JSONResponse({"detail": str(error)}, status_code=422)
         if not url:
