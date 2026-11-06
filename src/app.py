@@ -22,7 +22,7 @@ from starlette.routing import Mount, WebSocketRoute
 from src.config import PROJECT_DIR, Settings
 from src.contract import TranscribeResult
 from src.admin_api import Backends, Slot, Usage, register
-from src.engine import RoutedEngine, SttEngine, WhisperEngine, probe_whisper
+from src.engine import Decoder, RoutedEngine, SttEngine, probe_whisper
 from src.errors import AudioRejected, EngineFailed, IdentityRequired, QuotaExceeded, ScribeError
 from src.identity import owner_from_context
 from src.middleware import InternalTokenMiddleware
@@ -57,10 +57,8 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
     backends = Backends(base.state_dir / "backends.json")
     usage = Usage()
     engine = engine or RoutedEngine(
-        WhisperEngine(
-            base.models_dir, settings.model, lambda: settings.ffmpeg,
-            max_seconds=lambda: settings.max_seconds, decode_timeout_s=lambda: settings.timeout_s,
-        ),
+        Decoder(lambda: settings.ffmpeg, max_seconds=lambda: settings.max_seconds, decode_timeout_s=lambda: settings.timeout_s),
+        settings.model,
         lambda: backends.get("whisper"), timeout_s=lambda: settings.timeout_s + 5,
     )
     store = AudioStore(base.audio_dir, lambda: settings.ttl_seconds, lambda: settings.quota_bytes)
@@ -157,13 +155,13 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
     async def status() -> list[dict[str, str]]:
         remote = backends.get("whisper")
         return [{"label": "Model", "value": settings.model},
-                {"label": "Speech model runs", "value": "in a model service" if remote else "in this process"}]
+                {"label": "Speech model runs", "value": "in a model service" if remote else "not connected"}]
 
     if config is not None:
         register(mcp, service="Scribe", admin_password=base.admin_password, usage=usage, backends=backends, status=status,
                  playground=PLAYGROUND, slots=[
-            Slot("whisper", "Speech to text", "Local runs faster-whisper inside Scribe. A model service is a STTWhisperModel address; "
-                 "its model must match Scribe's model option, which keys the transcript cache.", probe_whisper, "http://127.0.0.1:9230"),
+            Slot("whisper", "Speech to text", "The STTWhisperModel service that transcribes. Its model must match Scribe's model option, which keys the transcript cache.",
+                 probe_whisper, "http://127.0.0.1:9230", local=False),
         ])
 
         @mcp.custom_route("/admin/settings", methods=["GET", "PUT"])

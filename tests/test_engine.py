@@ -7,7 +7,7 @@ import pytest
 
 import httpx
 
-from src.engine import PCM_BYTES_PER_SECOND, RoutedEngine, WhisperEngine, probe_whisper
+from src.engine import PCM_BYTES_PER_SECOND, Decoder, RoutedEngine, probe_whisper
 from src.errors import AudioRejected, EngineFailed
 
 needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not on PATH")
@@ -19,7 +19,7 @@ async def test_decode_a_generated_tone(tmp_path):
     subprocess.run(
         ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=1", str(wav)], check=True
     )
-    pcm = await WhisperEngine(tmp_path, "base.en", "ffmpeg").decode(wav)
+    pcm = await Decoder("ffmpeg").decode(wav)
     assert abs(len(pcm) / PCM_BYTES_PER_SECOND - 1.0) < 0.1
 
 
@@ -28,7 +28,7 @@ async def test_decode_rejects_garbage(tmp_path):
     junk = tmp_path / "junk.bin"
     junk.write_bytes(b"not audio at all")
     with pytest.raises(AudioRejected):
-        await WhisperEngine(tmp_path, "base.en", "ffmpeg").decode(junk)
+        await Decoder("ffmpeg").decode(junk)
 
 
 async def test_decode_bounds_ffmpeg_output_and_rejects_long_audio(tmp_path, monkeypatch):
@@ -42,7 +42,7 @@ async def test_decode_bounds_ffmpeg_output_and_rejects_long_audio(tmp_path, monk
         return Process()
     monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
     with pytest.raises(AudioRejected):
-        await WhisperEngine(tmp_path, "base.en", "ffmpeg", max_seconds=2).decode(tmp_path / "audio")
+        await Decoder("ffmpeg", max_seconds=2).decode(tmp_path / "audio")
 
 
 @pytest.mark.parametrize("cancel", [False, True])
@@ -65,7 +65,7 @@ async def test_decode_timeout_and_cancel_kill_and_reap_process(tmp_path, monkeyp
     async def spawn(*args, **kwargs):
         return process
     monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
-    task = asyncio.create_task(WhisperEngine(tmp_path, "base.en", "ffmpeg", decode_timeout_s=0.02).decode(tmp_path / "audio"))
+    task = asyncio.create_task(Decoder("ffmpeg", decode_timeout_s=0.02).decode(tmp_path / "audio"))
     await process.started.wait()
     if cancel:
         task.cancel()
@@ -75,7 +75,7 @@ async def test_decode_timeout_and_cancel_kill_and_reap_process(tmp_path, monkeyp
 
 
 def routed(url, token):
-    return RoutedEngine(WhisperEngine(Path("."), "base.en", "ffmpeg"), lambda: (url, token))
+    return RoutedEngine(Decoder("ffmpeg"), "base.en", lambda: (url, token))
 
 
 REAL_CLIENT = httpx.AsyncClient  # captured at import: remote() may run twice in one test
@@ -127,19 +127,18 @@ async def test_routed_engine_unreachable_service_is_engine_failed(monkeypatch):
         await routed("http://whisper:9230", "").transcribe(b"\0\0")
 
 
-async def test_the_slot_is_read_on_every_call_and_empty_means_the_local_engine(monkeypatch):
-    class Local(WhisperEngine):
-        async def transcribe(self, pcm):
-            return "local"
-
+async def test_the_slot_is_read_on_every_call_and_empty_means_not_connected(monkeypatch):
     slot = {"now": None}
-    engine = RoutedEngine(Local(Path("."), "small.en", "ffmpeg"), lambda: slot["now"])
-    assert engine.model_name == "small.en" and not engine.is_remote and await engine.transcribe(b"\0\0") == "local"
+    engine = RoutedEngine(Decoder("ffmpeg"), "small.en", lambda: slot["now"])
+    assert engine.model_name == "small.en" and not engine.is_remote
+    with pytest.raises(EngineFailed, match="admin page"):
+        await engine.transcribe(b"\0\0")
     remote(monkeypatch, lambda request: httpx.Response(200, json={"text": "far", "language": "en", "segments": [], "words": []}))
     slot["now"] = ("http://whisper:9230", "t")
     assert engine.is_remote and (await engine.transcribe(b"\0\0")).text == "far"
     slot["now"] = None
-    assert await engine.transcribe(b"\0\0") == "local"
+    with pytest.raises(EngineFailed):
+        await engine.transcribe(b"\0\0")
 
 
 async def test_probe_whisper_checks_health_then_sends_the_token_with_a_little_silence(monkeypatch):

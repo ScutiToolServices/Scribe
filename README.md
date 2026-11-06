@@ -1,6 +1,6 @@
 # Scribe
 
-Speech to text for Citadel and Ember. A user attaches an English audio file (mp3, wav, m4a, ogg, flac, webm) in chat; the agent calls `scribe__tool_scribe_transcribe` and answers with the transcript. Runs locally with faster-whisper on CPU.
+Speech to text for Citadel and Ember. A user attaches an English audio file (mp3, wav, m4a, ogg, flac, webm) in chat; the agent calls `scribe__tool_scribe_transcribe` and answers with the transcript. The transcription runs on a `STTWhisperModel` service: connect one on the admin page first.
 
 - Upload: `POST /api/files` (raw bytes, `X-Requester-Username`, `X-Filename`), used by ember_api and the authenticated admin playground.
 - Tool: `tool_scribe_transcribe(file_id, timestamps=false)` over MCP at `/mcp`.
@@ -28,7 +28,7 @@ With `SCRIBE_ADMIN_PASSWORD` set, `/admin/` (header `X-Admin-Password`) has four
 
 - **Status**: what the service runs and for how long, plus the model and where it runs.
 - **Usage**: calls, errors and average time per user since the service started (kept in memory, so a restart clears it).
-- **Model services**: speech to text runs in Scribe or at a `STTWhisperModel` address (address and token are saved on the admin page only). Keep `SCRIBE_MODEL` equal to the model the service runs: it keys the transcript cache. Pick **In this service** or **A model service**, set the address and token, press **Test connection** (it calls the other service with that token), then **Save**. A change applies to the next call; the token is stored in `.data/backends.json`, never shown again, and `Use the environment value` drops the saved one.
+- **Model services**: speech to text runs at a `STTWhisperModel` address (Scribe has no local model) (address and token are saved on the admin page only). Keep `SCRIBE_MODEL` equal to the model the service runs: it keys the transcript cache. Pick a saved connection or **Another address**, set the address and token, press **Test connection** (it calls the other service with that token), then **Save**. A change applies to the next call; the token is stored in `.data/backends.json`, never shown again, and `Use the environment value` drops the saved one (back to not connected).
 - **Settings**: the options saved in `.data/settings.json`.
 
 

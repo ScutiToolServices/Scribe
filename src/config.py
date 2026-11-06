@@ -25,7 +25,6 @@ class Settings:
     # small.en was x0.5 there. Raise both together on a faster or GPU host.
     model: str = "base.en"
     ffmpeg: str = "ffmpeg"
-    # Empty = run faster-whisper inside Scribe. Set = call the STTWhisperModel service (SCRIBE_MODEL must match its model).
     max_bytes: int = 25 * 1024 * 1024
     max_seconds: int = 150
     ttl_seconds: int = 24 * 3600
@@ -47,10 +46,6 @@ class Settings:
     @property
     def audio_dir(self) -> Path:
         return self.data_dir / "audio"
-
-    @property
-    def models_dir(self) -> Path:
-        return self.data_dir / "models"
 
     @property
     def staging_dir(self) -> Path:

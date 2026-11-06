@@ -14,5 +14,5 @@ COPY web ./web
 RUN uv sync --frozen --no-dev --no-editable
 
 EXPOSE 8091
-# The model downloads into the /data volume on first start; later starts reuse it (and still boot offline).
-CMD ["sh", "-c", "python -c \"from faster_whisper import WhisperModel; WhisperModel('${SCRIBE_MODEL:-base.en}', device='cpu', compute_type='int8', download_root='/data/models')\"; exec python -m src.run"]
+# No model runs here: save a STTWhisperModel connection on the admin page.
+CMD ["python", "-m", "src.run"]
