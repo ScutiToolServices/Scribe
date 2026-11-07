@@ -6,4 +6,4 @@ __pycache__
 .pytest_cache
 tests
 tools
-zip_versions
+_zip_versions

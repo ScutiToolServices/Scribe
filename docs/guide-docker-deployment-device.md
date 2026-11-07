@@ -11,7 +11,7 @@ Run Scribe on a separate always-on machine (default `lex@scutiserver1.local`, fo
 
 ## 1. Publish the code (from your PC)
 
-Run `Scribe\tools\deploy.bat`. Menu:
+Run `Scribe\run.bat` and choose **Deploy** (or `run.bat deploy`). Menu:
 
 | Option | Does |
 |---|---|
@@ -22,7 +22,7 @@ Run `Scribe\tools\deploy.bat`. Menu:
 | 6 | chown helper, if option 2 says `Permission denied` |
 | R | Release: publish, then tag `VERSION` |
 
-Keep your own target in the git-ignored `tools\deploy.local.bat` (copy `tools\deploy.local.example.bat`), or set
+Keep your own target in the git-ignored `tools\deploy.local.ini` (copy `tools\deploy.local.example.ini`), or set
 `DEPLOY_HOST`, `DEPLOY_DIR` and `DEPLOY_WEB_PORT` before running. Commit `main` first: publish reads committed `main`.
 
 ## 2. First-time setup on the machine
@@ -56,7 +56,7 @@ docker compose up -d --build
 
 ## Releasing
 
-A plain publish (`tools\deploy.bat` option 1) only updates the `live` branch. For a release set `VERSION` (and `pyproject.toml` to the same number), commit, then run `tools\deploy.bat` option R or `py tools\publish_live.py --release`. `tools\make_zip.bat` then builds `zip_versions\Scribe-<VERSION>.zip`.
+A plain publish (`run.bat`, Deploy, option 1) only updates the `live` branch. For a release set `VERSION` (and `pyproject.toml` to the same number), commit, then run `run.bat`, Deploy, option R or `py tools\publish_live.py --release`. `run.bat`, Build the release ZIP, then builds `_zip_versions\Scribe-<VERSION>.zip`.
 
 ## Problems
 
