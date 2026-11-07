@@ -1,6 +1,6 @@
 # Scribe
 
-Speech to text for Citadel and Ember. A user attaches an English audio file (mp3, wav, m4a, ogg, flac, webm) in chat; the agent calls `scribe__tool_scribe_transcribe` and answers with the transcript. The transcription runs on a `STT_Whisper_Model` service: connect one on the admin page first.
+Speech to text for Citadel and Ember, with HTTP and MCP on port 29401. A user attaches an English audio file (mp3, wav, m4a, ogg, flac, webm) in chat; the agent calls `scribe__tool_scribe_transcribe` and answers with the transcript. The transcription runs on a `STT_Whisper_Model` service: connect one on the admin page first.
 
 ## Tools and API
 

@@ -215,14 +215,14 @@ async def test_check_sends_the_token_and_hides_connection_errors(monkeypatch):
 
 def test_a_slot_can_use_a_saved_connection_shared_with_other_slots(tmp_path):
     c, _, backends, seen = make(tmp_path)
-    saved = c.put("/admin/connections/gpu box", headers=PW, json={"url": "http://10.0.0.5:9150/", "token": "s3cret"})
+    saved = c.put("/admin/connections/gpu box", headers=PW, json={"url": "http://10.0.0.5:29320/", "token": "s3cret"})
     assert saved.status_code == 200
-    assert saved.json()["connections"] == [{"name": "gpu box", "url": "http://10.0.0.5:9150", "token_set": True, "used_by": []}]
+    assert saved.json()["connections"] == [{"name": "gpu box", "url": "http://10.0.0.5:29320", "token_set": True, "used_by": []}]
     assert "s3cret" not in saved.text
     listing = c.put("/admin/backends/one", headers=PW, json={"connection": "gpu box"}).json()
     assert listing["backends"][0]["connection"] == "gpu box" and listing["backends"][0]["mode"] == "remote"
     assert listing["connections"][0]["used_by"] == ["one"]
-    assert backends.get("one") == ("http://10.0.0.5:9150", "s3cret")
+    assert backends.get("one") == ("http://10.0.0.5:29320", "s3cret")
 
 
 def test_editing_a_connection_reaches_the_slots_that_use_it_and_keeps_the_token(tmp_path):

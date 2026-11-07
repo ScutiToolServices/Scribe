@@ -1,5 +1,5 @@
 # Scribe speech-to-text MCP server.
-# Start:  docker compose up -d --build        (armory reaches it at http://scribe:8091/mcp)
+# Start:  docker compose up -d --build        (armory reaches it at http://scribe:29401/mcp)
 # Needs a .env next to this file with INTERNAL_API_TOKEN (same value as Citadel's); see .env.example.
 
 name: scribe
@@ -18,11 +18,11 @@ services:
       SCRIBE_STREAM_IDLE_S: ${SCRIBE_STREAM_IDLE_S:-15}
       SCRIBE_STREAM_WINDOW_S: ${SCRIBE_STREAM_WINDOW_S:-30}
     ports:
-      - "${SCRIBE_BIND:-0.0.0.0}:${SCRIBE_PORT:-8091}:8091"
+      - "${SCRIBE_BIND:-0.0.0.0}:${SCRIBE_PORT:-29401}:29401"
     volumes:
       - scribe_data:/data
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:29401/health')"]
       interval: 15s
       timeout: 5s
       start_period: 30s
@@ -32,7 +32,7 @@ volumes:
   scribe_data:
 
 networks:
-  # Join the Citadel stack's network so armory/ember_api can reach http://scribe:8091. Start the Citadel stack first:
+  # Join the Citadel stack's network so armory/ember_api can reach http://scribe:29401. Start the Citadel stack first:
   # it creates this network.
   citadel:
     name: citadel_core

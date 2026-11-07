@@ -98,9 +98,9 @@ async def test_routed_engine_posts_pcm_with_the_token_and_maps_the_reply(monkeyp
         })
 
     remote(monkeypatch, handler)
-    engine = routed("http://whisper:9230", "whisper_x")
+    engine = routed("http://whisper:29300", "whisper_x")
     transcript = await engine.transcribe(b"\0\0" * 10)
-    assert seen == {"url": "http://whisper:9230/v1/transcribe?language=en&beam_size=1&word_timestamps=true",
+    assert seen == {"url": "http://whisper:29300/v1/transcribe?language=en&beam_size=1&word_timestamps=true",
                     "token": "whisper_x", "size": 20}
     assert transcript.text == "hello world" and transcript.language == "en" and engine.model_name == "base.en"
     assert [(w.start_s, w.end_s, w.text) for w in transcript.words] == [(0.0, 0.5, "hello"), (0.5, 1.0, "world")]
@@ -114,17 +114,17 @@ async def test_routed_engine_posts_pcm_with_the_token_and_maps_the_reply(monkeyp
 async def test_routed_engine_failures_are_one_safe_message(monkeypatch, answer):
     remote(monkeypatch, lambda request: answer)
     with pytest.raises(EngineFailed) as raised:
-        await routed("http://whisper:9230", "").transcribe(b"\0\0")
+        await routed("http://whisper:29300", "").transcribe(b"\0\0")
     assert str(raised.value) == "Transcription failed. Try again." and "secret" not in str(raised.value)
 
 
 async def test_routed_engine_unreachable_service_is_engine_failed(monkeypatch):
     def refuse(request):
-        raise httpx.ConnectError("connection refused to http://whisper:9230")
+        raise httpx.ConnectError("connection refused to http://whisper:29300")
 
     remote(monkeypatch, refuse)
     with pytest.raises(EngineFailed):
-        await routed("http://whisper:9230", "").transcribe(b"\0\0")
+        await routed("http://whisper:29300", "").transcribe(b"\0\0")
 
 
 async def test_the_slot_is_read_on_every_call_and_empty_means_not_connected(monkeypatch):
@@ -134,7 +134,7 @@ async def test_the_slot_is_read_on_every_call_and_empty_means_not_connected(monk
     with pytest.raises(EngineFailed, match="admin page"):
         await engine.transcribe(b"\0\0")
     remote(monkeypatch, lambda request: httpx.Response(200, json={"text": "far", "language": "en", "segments": [], "words": []}))
-    slot["now"] = ("http://whisper:9230", "t")
+    slot["now"] = ("http://whisper:29300", "t")
     assert engine.is_remote and (await engine.transcribe(b"\0\0")).text == "far"
     slot["now"] = None
     with pytest.raises(EngineFailed):
@@ -151,8 +151,8 @@ async def test_probe_whisper_checks_health_then_sends_the_token_with_a_little_si
         return httpx.Response(200, json={"text": "", "model": "base.en", "segments": [], "words": []})
 
     remote(monkeypatch, handler)
-    assert await probe_whisper("http://w:9230", "tok") == "Connected, token accepted, model base.en."
+    assert await probe_whisper("http://w:29300", "tok") == "Connected, token accepted, model base.en."
     assert seen == [("GET", "/health", None, 0), ("POST", "/v1/transcribe", "tok", 3200)]
     remote(monkeypatch, lambda request: httpx.Response(200, json={"status": "ok"}))
     with pytest.raises(Exception, match="not a STT_Whisper_Model service"):
-        await probe_whisper("http://w:9230", "tok")
+        await probe_whisper("http://w:29300", "tok")

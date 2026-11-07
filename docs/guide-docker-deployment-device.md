@@ -39,7 +39,7 @@ Create `.env` (deploy option 2 copies yours, or `cp .env.example .env` and edit)
 
 ```bash
 docker compose up -d --build
-curl http://127.0.0.1:8091/health
+curl http://127.0.0.1:29401/health
 ```
 
 Then open `/admin/`, save a connection to the STT_Whisper_Model service under **Model services**, and press **Test connection**.

@@ -1,6 +1,6 @@
 # Scribe: without Docker, on Windows
 
-Run Scribe directly with Python: one process, no load balancer, listening on `127.0.0.1:8091`.
+Run Scribe directly with Python: one process, no load balancer, listening on `127.0.0.1:29401`.
 
 ## Requirements
 
@@ -21,14 +21,14 @@ uv run python -m src.run
 ## Check
 
 ```bash
-curl http://127.0.0.1:8091/health
+curl http://127.0.0.1:29401/health
 ```
 
 Then open `/admin/`, save a connection to the STT_Whisper_Model service under **Model services**, and press **Test connection**.
 
 ## Stop
 
-Ctrl+C in the terminal. Do not run this and the Docker stack together: both use port 8091.
+Ctrl+C in the terminal. Do not run this and the Docker stack together: both use port 29401.
 
 ## Tests
 

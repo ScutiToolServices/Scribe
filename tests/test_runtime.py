@@ -44,7 +44,7 @@ def test_live_settings_follow_a_saved_change(tmp_path):
     base = Settings(data_dir=tmp_path, admin_password="pw", ttl_seconds=3600)
     config = make_config(base)
     settings = live(base, config)
-    assert (settings.ttl_seconds, settings.port) == (3600, 8091)
+    assert (settings.ttl_seconds, settings.port) == (3600, 29401)
     config.set({"ttl_hours": 2, "quota_mb": 5, "max_seconds": 60, "stream_idle_s": 3})
     assert settings.ttl_seconds == 7200
     assert settings.quota_bytes == 5 * 1024 * 1024

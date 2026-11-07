@@ -1,6 +1,6 @@
 # Scribe
 
-Speech-to-text MCP server for Citadel and Ember. A standalone service on port 8091, registered in Armory as the `scribe` extension. Design: `Python/Citadel/docs/superpowers/specs/2026-10-25-scribe-design.md`. Plan: `Python/Citadel/docs/superpowers/plans/2026-10-25-scribe.md`. Counterpart of Bard (text to speech, `../Bard`).
+Speech-to-text MCP server for Citadel and Ember. A standalone service on port 29401, registered in Armory as the `scribe` extension. Design: `Python/Citadel/docs/superpowers/specs/2026-10-25-scribe-design.md`. Plan: `Python/Citadel/docs/superpowers/plans/2026-10-25-scribe.md`. Counterpart of Bard (text to speech, `../Bard`).
 
 ## Agent instructions
 This file is the one instruction file for every coding agent; `CLAUDE.md` only imports it (`@AGENTS.md`). Edit this file, never `CLAUDE.md`.

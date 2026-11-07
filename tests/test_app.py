@@ -133,7 +133,7 @@ def test_the_admin_page_shows_status_usage_and_the_whisper_slot(settings):
     assert {"label": "Speech model runs", "value": "not connected"} in body["items"]
     slots = c.get("/admin/backends", headers=pw).json()["backends"]
     assert [(s["key"], s["url"]) for s in slots] == [("whisper", "")]
-    saved = c.put("/admin/backends/whisper", headers=pw, json={"url": "http://w:9230", "token": "t"}).json()["backends"][0]
+    saved = c.put("/admin/backends/whisper", headers=pw, json={"url": "http://w:29300", "token": "t"}).json()["backends"][0]
     assert saved["mode"] == "remote" and saved["token_set"] is True
     assert {"label": "Speech model runs", "value": "in a model service"} in c.get("/admin/status", headers=pw).json()["items"]
 

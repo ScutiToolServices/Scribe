@@ -15,7 +15,7 @@ In `.env` next to `docker-compose.yml` (copy `.env.example`):
 | Variable | Default | Effect |
 |---|---|---|
 | `INTERNAL_API_TOKEN` | empty | Shared token for `/mcp` and `/api/*`. Required when `SCRIBE_HOST` is not loopback. |
-| `SCRIBE_HOST` / `SCRIBE_PORT` | `127.0.0.1` / `8091` | Listen address (Compose sets the host itself). |
+| `SCRIBE_HOST` / `SCRIBE_PORT` | `127.0.0.1` / `29401` | Listen address (Compose sets the host itself). |
 | `SCRIBE_BIND` | see `.env.example` | Docker only: the address the published port listens on. |
 | `SCRIBE_ADMIN_PASSWORD` | empty | Unlocks `/admin/`. Empty = page off, so no model connection can be saved. |
 
@@ -25,7 +25,7 @@ Everything else (limits, data folder, model connection) is set on the admin page
 
 ```bash
 docker compose up -d --build
-curl http://127.0.0.1:8091/health
+curl http://127.0.0.1:29401/health
 ```
 
 Then open `/admin/`, save a connection to the STT_Whisper_Model service under **Model services**, and press **Test connection**.

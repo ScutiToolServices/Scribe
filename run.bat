@@ -1,5 +1,5 @@
 @echo off
-REM Starts the Scribe Service on port 8091 (syncs .venv with uv on each run).
+REM Starts the Scribe Service on port 29401 (syncs .venv with uv on each run).
 REM LABEL: Scribe Service
 REM DESCRIPTION: Speech to text MCP tool server for Citadel and Ember (needs WhisperModel running).
 cd /d "%~dp0"
