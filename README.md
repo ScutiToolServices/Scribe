@@ -54,3 +54,6 @@ Enter the requester username and upload encoded audio. The panel posts its bytes
 
 - [Deployment](deployment.md)
 - [Changelog](CHANGELOG.md)
+- [Docker on this PC](docs/guide-docker-same-device.md)
+- [Docker on another machine](docs/guide-docker-deployment-device.md)
+- [Run without Docker](docs/guide-no-docker-same-device.md)
