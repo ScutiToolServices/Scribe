@@ -52,6 +52,7 @@ Enter the requester username and upload encoded audio. The panel posts its bytes
 
 ## Documentation
 
+- [Purpose: input, output and what it is for](docs/purpose.md)
 - [Deployment](deployment.md)
 - [Changelog](CHANGELOG.md)
 - [Docker on this PC](docs/guide-docker-same-device.md)
