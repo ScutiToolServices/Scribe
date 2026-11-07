@@ -14,5 +14,5 @@ COPY web ./web
 RUN uv sync --frozen --no-dev --no-editable
 
 EXPOSE 8091
-# No model runs here: save a STTWhisperModel connection on the admin page.
+# No model runs here: save a STT_Whisper_Model connection on the admin page.
 CMD ["python", "-m", "src.run"]

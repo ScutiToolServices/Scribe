@@ -198,7 +198,7 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
     if config is not None:
         register(mcp, connect=CONNECT, service="Scribe", admin_password=base.admin_password, usage=usage, backends=backends, status=status,
                  playground=PLAYGROUND, slots=[
-            Slot("whisper", "Speech to text", "The STTWhisperModel service that transcribes. Its model must match Scribe's model option, which keys the transcript cache.",
+            Slot("whisper", "Speech to text", "The STT_Whisper_Model service that transcribes. Its model must match Scribe's model option, which keys the transcript cache.",
                  probe_whisper, "http://127.0.0.1:9230", local=False),
         ])
 
