@@ -25,7 +25,8 @@ from src.admin_api import Backends, Slot, Usage, register
 from src.engine import Decoder, RoutedEngine, SttEngine, probe_whisper
 from src.errors import AudioRejected, EngineFailed, IdentityRequired, QuotaExceeded, ScribeError
 from src.identity import owner_from_context
-from src.middleware import InternalTokenMiddleware
+from src.middleware import TokenMiddleware
+from src.tokens import TokenStore
 from src.options import live, make_config
 from src.runtime import Config
 from src.service import ScribeService
@@ -93,6 +94,7 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
     config = config if config is not None else make_config(settings)
     base, settings = settings, live(settings, config)
     backends = Backends(base.state_dir / "backends.json")
+    tokens = TokenStore(base.state_dir / "tokens.json", "scribe_")
     usage = Usage()
     engine = engine or RoutedEngine(
         Decoder(lambda: settings.ffmpeg, max_seconds=lambda: settings.max_seconds, decode_timeout_s=lambda: settings.timeout_s),
@@ -196,7 +198,7 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
                 {"label": "Speech model runs", "value": "in a model service" if remote else "not connected"}]
 
     if config is not None:
-        register(mcp, connect=CONNECT, service="Scribe", admin_password=base.admin_password, usage=usage, backends=backends, status=status,
+        register(mcp, connect=CONNECT, service="Scribe", admin_password=base.admin_password, usage=usage, backends=backends, tokens=tokens, status=status,
                  playground=PLAYGROUND, slots=[
             Slot("whisper", "Speech to text", "The STT_Whisper_Model service that transcribes. Its model must match Scribe's model option, which keys the transcript cache.",
                  probe_whisper, "http://127.0.0.1:29300", local=False),
@@ -224,5 +226,5 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
     if config is not None and WEB_DIR.is_dir():
         app.router.routes.append(Mount("/admin", StaticFiles(directory=WEB_DIR, html=True)))
     app.router.routes.append(WebSocketRoute("/api/stream", stream))
-    app.add_middleware(InternalTokenMiddleware, token=settings.internal_token)
+    app.add_middleware(TokenMiddleware, tokens=tokens if base.admin_password else None)
     return app

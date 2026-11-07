@@ -46,7 +46,7 @@ uv run pytest -q
 
 ## Try it from the admin page
 
-Open `/admin/` and use **Try it** with the service's internal API token and a requester username. The token is held only in memory, separate from admin sign-in. Requests use the ordinary public API, quotas and cache; the panel shows HTTP status, latency, output, cancellation and curl with a token placeholder. See [the web UI guide](docs/guide-web-ui.md).
+Open `/admin/` and use **Try it** with a token from the **Tokens** card and a requester username. The token is held only in memory, separate from admin sign-in. Requests use the ordinary public API, quotas and cache; the panel shows HTTP status, latency, output, cancellation and curl with a token placeholder. See [the web UI guide](docs/guide-web-ui.md).
 
 Enter the requester username and upload encoded audio. The panel posts its bytes to `POST /api/transcribe` with `X-Requester-Username` and `X-Filename`, then displays the JSON transcript. Scribe keeps its existing ffmpeg decoding, duration/byte caps, per-user quota, cached transcription and retention behavior. This upload playground does not start a live dictation WebSocket.
 

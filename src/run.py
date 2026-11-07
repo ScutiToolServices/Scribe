@@ -21,8 +21,8 @@ def main() -> None:
         else:
             print(".env: no file in the service folder", flush=True)
     settings = load_settings()
-    if settings.exposed_without_token:
-        sys.exit("Scribe refuses to start: SERVICE_HOST is not a loopback address and INTERNAL_API_TOKEN is empty.")
+    if settings.exposed_without_auth:
+        sys.exit("Scribe refuses to start: SERVICE_HOST is not a loopback address and SERVICE_ADMIN_PASSWORD is empty (it unlocks the token page).")
     config = make_config(settings)
     uvicorn.run(
         build_app(settings, config=config), host=settings.host, port=settings.port, log_level="info",

@@ -17,7 +17,6 @@ LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 class Settings:
     host: str = "127.0.0.1"
     port: int = 29401
-    internal_token: str = ""
     data_dir: Path = PROJECT_DIR / ".data"
     config_dir: Path | None = None  # set when the data folder was moved: the folder that keeps settings.json
     # base.en and 150 s: measured x1.6 real time on a 6-core CPU, and Armory cancels a tool call after 120 s.
@@ -51,9 +50,9 @@ class Settings:
         return self.data_dir / "staging"
 
     @property
-    def exposed_without_token(self) -> bool:
-        """Listening beyond loopback with no token lets anything that can reach the port call every tool."""
-        return not self.internal_token and self.host not in LOOPBACK_HOSTS
+    def exposed_without_auth(self) -> bool:
+        """Listening beyond loopback with no admin password means no tokens, so anything that can reach the port could call every tool."""
+        return not self.admin_password.strip() and self.host not in LOOPBACK_HOSTS
 
 
 def _from_environment() -> Settings:
@@ -61,8 +60,7 @@ def _from_environment() -> Settings:
     return Settings(
         host=env("SERVICE_HOST", "127.0.0.1"),
         port=int(env("SERVICE_PORT", "29401")),
-        internal_token=env("INTERNAL_API_TOKEN", ""),
-        data_dir=Path(env("SERVICE_DATA_DIR") or PROJECT_DIR / ".data"),
+                data_dir=Path(env("SERVICE_DATA_DIR") or PROJECT_DIR / ".data"),
         model=env("SERVICE_MODEL", "base.en"),
         ffmpeg=env("SERVICE_FFMPEG", "ffmpeg"),
         max_bytes=int(env("SERVICE_MAX_BYTES", str(25 * 1024 * 1024))),

@@ -4,12 +4,17 @@ from starlette.testclient import TestClient
 
 from src.app import build_app
 from tests.conftest import FakeEngine, audio
+from tests.seed import seed_token
 
 ANN = {"X-Requester-Username": "ann"}
+TOK = {**ANN, "X-Internal-Token": "secret"}  # a seeded token, for the tests that run with an admin password
 
 
 def make(settings, **changes):
-    return TestClient(build_app(replace(settings, **changes), FakeEngine()))
+    settings = replace(settings, **changes)
+    if settings.admin_password:
+        seed_token(settings, "secret")
+    return TestClient(build_app(settings, FakeEngine()))
 
 
 def test_health(settings):
@@ -46,7 +51,7 @@ def test_upload_over_quota_is_413(settings):
 
 
 def test_upload_needs_token_when_configured(settings):
-    c = make(settings, internal_token="secret")
+    c = make(settings, admin_password="pw")
     assert c.post("/api/files", content=audio(), headers=ANN).status_code == 401
     assert c.post("/api/files", content=audio(), headers={**ANN, "X-Internal-Token": "secret"}).status_code == 200
 
@@ -62,7 +67,7 @@ def test_dictation_returns_text_and_reuses_cache(settings):
 
 
 def test_dictation_auth_and_validation(settings):
-    client = make(settings, internal_token="secret")
+    client = make(settings, admin_password="pw")
     assert client.post("/api/transcribe", content=audio(), headers=ANN).status_code == 401
     headers = {**ANN, "X-Internal-Token": "secret"}
     assert client.post("/api/transcribe", content=audio(), headers={"X-Internal-Token": "secret"}).status_code == 401
@@ -80,7 +85,7 @@ def test_dictation_engine_failure_is_503(settings):
 
 
 def admin(settings):
-    return TestClient(build_app(replace(settings, admin_password="pw"), FakeEngine()))
+    return TestClient(build_app(seed_token(replace(settings, admin_password="pw"), "secret"), FakeEngine()))
 
 
 AUTH = {"X-Admin-Password": "pw"}
@@ -101,7 +106,7 @@ def test_admin_saves_and_the_service_uses_it(settings):
     rows = {r["key"]: r for r in c.get("/admin/settings", headers=AUTH).json()["settings"]}
     assert rows["max_seconds"]["value"] == settings.max_seconds and rows["model"]["restart"]
     assert c.put("/admin/settings", json={"values": {"max_seconds": 1}}, headers=AUTH).status_code == 200
-    assert c.post("/api/files", content=audio(2.0), headers=ANN).status_code == 400  # now over the 1 s limit
+    assert c.post("/api/files", content=audio(2.0), headers=TOK).status_code == 400  # now over the 1 s limit
 
 
 def test_admin_refuses_bad_values(settings):
@@ -111,23 +116,23 @@ def test_admin_refuses_bad_values(settings):
     assert c.put("/admin/settings", json={"oops": 1}, headers=AUTH).status_code == 422
 
 
-def test_admin_page_is_served_without_the_internal_token(settings):
+def test_admin_page_is_served_without_a_token(settings):
     assert admin(settings).get("/admin/").status_code == 200
 
 
 def test_admin_upload_limit_applies_without_restart(settings):
     c = admin(settings)
-    assert c.post("/api/files", content=audio(1.0), headers=ANN).status_code == 200
+    assert c.post("/api/files", content=audio(1.0), headers=TOK).status_code == 200
     assert c.put("/admin/settings", json={"values": {"max_upload_mb": 1}}, headers=AUTH).status_code == 200
-    assert c.post("/api/files", content=b"" * (2 * 1024 * 1024), headers=ANN).status_code == 413
+    assert c.post("/api/files", content=b"" * (2 * 1024 * 1024), headers=TOK).status_code == 413
 
 
 def test_the_admin_page_shows_status_usage_and_the_whisper_slot(settings):
     c = make(settings, admin_password="pw")
     pw = {"X-Admin-Password": "pw"}
     assert c.get("/admin/status").status_code == 401
-    c.post("/api/transcribe", content=audio(), headers=ANN)
-    c.post("/api/transcribe", content=audio(), headers=ANN)
+    c.post("/api/transcribe", content=audio(), headers=TOK)
+    c.post("/api/transcribe", content=audio(), headers=TOK)
     body = c.get("/admin/status", headers=pw).json()
     assert body["usage"]["calls"] == 2 and body["usage"]["users"][0]["user"] == "ann"
     assert {"label": "Speech model runs", "value": "not connected"} in body["items"]

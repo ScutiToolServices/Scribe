@@ -2,14 +2,18 @@
 
 With the service's admin password configured, open `http://127.0.0.1:29401/admin/` and sign in to manage status, model backends and settings. Public request authentication remains separate from that admin password.
 
+## Tokens
+
+The **Tokens** card makes one token per caller (Armory, another service). Enter a name, optionally a calls-per-minute limit and an expiry in days, and press **Create token**. The token is shown once: copy it into the caller's configuration (for Armory, the extension's `X-Internal-Token` header). **Revoke** cuts a caller off at once. Tokens are stored as hashes in `tokens.json` beside `settings.json`. With no token, every call to `/mcp` and `/api/*` is refused; `/health` and `/admin` need none.
+
 ## Connect to this service
 
-The **Connect to this service** card lists the addresses other services can use: the address you opened the page with, the same PC (`127.0.0.1`), another Docker container on the same network, and a Docker container calling this PC (`host.docker.internal`), then every endpoint with its method and a **Copy** button. Calls need the internal token in `X-Internal-Token`; HTTP routes also need `X-Requester-Username`.
+The **Connect to this service** card lists the addresses other services can use: the address you opened the page with, the same PC (`127.0.0.1`), another Docker container on the same network, and a Docker container calling this PC (`host.docker.internal`), then every endpoint with its method and a **Copy** button. Calls need a token from the **Tokens** card in `X-Internal-Token`; HTTP routes also need `X-Requester-Username`.
 
 ## Try it: send a real request
 
 1. Sign in to `/admin/` and find **Try it**.
-2. Paste a service token into the token field. This is the public client token, not the admin password. Use this tool service's configured internal API token and supply a requester username; do not use a model-backend token.
+2. Paste a service token into the token field. This is the public client token, not the admin password. Use a token made on the **Tokens** card and supply a requester username; do not use a model-backend token.
 3. Choose an operation, complete its labeled fields and send it. Requests go to this service's public route, with the same token scope, rate/admission limits and cache as a separate client.
 4. Read the HTTP status, elapsed time and response. NDJSON/SSE text appears while it arrives; JSON is formatted. HTTP errors, including 401, 422, 429 and 503, keep their response body visible. Use **Cancel** to abort an active request.
 5. Copy the curl equivalent to repeat the request elsewhere. The token is always a placeholder; fill it locally. For an upload, provide the indicated input file. Multi-step operations show their follow-up request too.

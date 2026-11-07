@@ -14,10 +14,9 @@ In `.env` next to `docker-compose.yml` (copy `.env.example`):
 
 | Variable | Default | Effect |
 |---|---|---|
-| `INTERNAL_API_TOKEN` | empty | Shared token for `/mcp` and `/api/*`. Required when `SERVICE_HOST` is not loopback. |
 | `SERVICE_HOST` / `SERVICE_PORT` | `127.0.0.1` / `29401` | Listen address (Compose sets the host itself). |
 | `SERVICE_BIND` | see `.env.example` | Docker only: the address the published port listens on. |
-| `SERVICE_ADMIN_PASSWORD` | empty | Unlocks `/admin/`. Empty = page off, so no model connection can be saved. |
+| `SERVICE_ADMIN_PASSWORD` | empty | Unlocks `/admin/`, where you make the callers' tokens, and turns token checks on for `/mcp` and `/api/*`. Required when `SERVICE_HOST` is not loopback. Empty = no page and no checks (loopback only). |
 
 Everything else (limits, data folder, model connection) is set on the admin page. See `docs/guide-web-ui.md`.
 
@@ -39,5 +38,5 @@ Then open `/admin/`, save a connection to the STT_Whisper_Model service under **
 | Symptom | Likely cause |
 |---|---|
 | Calls fail with "not connected" | No model service connection is saved on the admin page yet. |
-| 401 | The caller sends no `INTERNAL_API_TOKEN`, or the wrong one. |
-| The service refuses to start | `SERVICE_HOST` is not loopback and `INTERNAL_API_TOKEN` is empty. |
+| 401 | The caller sends no token in `X-Internal-Token`, or a wrong or revoked one. Make one on `/admin/`. |
+| The service refuses to start | `SERVICE_HOST` is not loopback and `SERVICE_ADMIN_PASSWORD` is empty. |

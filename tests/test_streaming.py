@@ -13,6 +13,7 @@ from src.errors import AudioRejected, EngineFailed
 from src.service import ScribeService
 from src.store import AudioStore
 from tests.conftest import FakeEngine, audio
+from tests.seed import seed_token
 
 ANN = {"X-Requester-Username": "ann"}
 
@@ -29,7 +30,7 @@ async def test_local_agreement_commits_prefix_and_trims_pcm():
 
 
 def test_websocket_requires_token_and_identity_before_accept(settings):
-    client = TestClient(build_app(replace(settings, internal_token="secret"), FakeEngine()))
+    client = TestClient(build_app(seed_token(replace(settings, admin_password="pw"), "secret"), FakeEngine()))
     for headers in [ANN, {"X-Internal-Token": "secret"}]:
         with pytest.raises(WebSocketDisconnect) as exc:
             with client.websocket_connect("/api/stream", headers=dict(headers)):
@@ -62,7 +63,7 @@ def test_websocket_capacity_and_frame_size(settings):
 
 
 def test_partial_route_is_ephemeral_and_validates(settings):
-    client = TestClient(build_app(replace(settings, internal_token="secret"), FakeEngine()))
+    client = TestClient(build_app(seed_token(replace(settings, admin_password="pw"), "secret"), FakeEngine()))
     headers = {**ANN, "X-Internal-Token": "secret"}
     assert client.post("/api/transcribe-partial", content=audio(), headers=ANN).status_code == 401
     assert client.post("/api/transcribe-partial", content=audio(), headers={"X-Internal-Token": "secret"}).status_code == 401

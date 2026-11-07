@@ -13,6 +13,7 @@ sync_api = pytest.importorskip("playwright.sync_api")
 from src.app import build_app
 from src.config import Settings
 from tests.conftest import audio
+from tests.seed import seed_token
 
 TOKEN = "playground-service-token"
 PASSWORD = "playground-admin-password"
@@ -20,7 +21,7 @@ PASSWORD = "playground-admin-password"
 
 @pytest.fixture
 def base_url(tmp_path, engine):
-    app = build_app(Settings(data_dir=tmp_path, internal_token=TOKEN, admin_password=PASSWORD), engine)
+    app = build_app(seed_token(Settings(data_dir=tmp_path, admin_password=PASSWORD), TOKEN), engine)
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]

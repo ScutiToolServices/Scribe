@@ -9,6 +9,9 @@ to the others). It adds, next to the existing /admin/settings:
   PUT  /admin/backends/{key}       also takes {"connection": name}: use a saved connection (see below)
   PUT  /admin/connections/{name}   {"url", "token"}: save a named model-service address, shared by every slot
   DELETE /admin/connections/{name} forget it (409 while a slot uses it)
+  GET/POST /admin/tokens           the tokens callers (Armory, other services) send in X-Internal-Token; POST {"name",
+                                   "rate"?, "expires_days"?} returns the plaintext token once
+  DELETE /admin/tokens/{id}        revoke it
 
 All behind the X-Admin-Password header. Slots are saved in `backends.json` beside the other data, so a change applies to
 the next call without a restart.
@@ -35,6 +38,8 @@ from urllib.parse import urlsplit
 import httpx
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+
+from src.tokens import TokenStore
 
 MAX_USERS = 200
 MAX_URL = 300
@@ -241,7 +246,7 @@ def _valid_url(url: str) -> bool:
             and not parts.username and not parts.password and not parts.fragment and not parts.query)
 
 
-def register(mcp: Any, *, service: str, admin_password: str, usage: Usage, backends: Backends, slots: list[Slot],
+def register(mcp: Any, *, service: str, admin_password: str, usage: Usage, backends: Backends, tokens: TokenStore, slots: list[Slot],
              status: Callable[[], Awaitable[list[dict[str, str]]]], playground: dict[str, Any] | None = None,
              connect: dict[str, Any] | None = None) -> None:
     """Add shared admin routes, the optional public-request playground descriptor and the optional `connect` descriptor
@@ -288,6 +293,29 @@ def register(mcp: Any, *, service: str, admin_password: str, usage: Usage, backe
             return refused
         return JSONResponse({"service": service, "items": await status(), "usage": usage.snapshot(), "playground": playground,
                              "connect": connect})
+
+    @mcp.custom_route("/admin/tokens", methods=["GET", "POST"])
+    async def admin_tokens(request: Request) -> Response:
+        if (refused := denied(request)) is not None:
+            return refused
+        if request.method == "GET":
+            return JSONResponse({"tokens": await asyncio.to_thread(tokens.list)})
+        data = await body_of(request)
+        name, rate, days = data.get("name"), data.get("rate"), data.get("expires_days")
+        if not isinstance(name, str) or not 1 <= len(name.strip()) <= 64:
+            return JSONResponse({"detail": "The name takes 1 to 64 characters."}, status_code=422)
+        for value, high in ((rate, 100_000), (days, 3650)):
+            if value is not None and (type(value) is not int or not 1 <= value <= high):
+                return JSONResponse({"detail": f"Rate and expiry are whole numbers from 1 to {high}."}, status_code=422)
+        return JSONResponse(await asyncio.to_thread(tokens.create, name.strip(), rate, days))
+
+    @mcp.custom_route("/admin/tokens/{token_id}", methods=["DELETE"])
+    async def admin_token(request: Request) -> Response:
+        if (refused := denied(request)) is not None:
+            return refused
+        if not await asyncio.to_thread(tokens.revoke, request.path_params["token_id"]):
+            return JSONResponse({"detail": "No such token."}, status_code=404)
+        return JSONResponse({"ok": True})
 
     @mcp.custom_route("/admin/backends", methods=["GET"])
     async def admin_backends(request: Request) -> Response:

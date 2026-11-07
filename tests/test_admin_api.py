@@ -1,4 +1,4 @@
-"""Shared by Bard, Scribe and Reader (the same file in all three), like src/admin_api.py."""
+"""Shared by all five tool services (the same file in all five), like src/admin_api.py."""
 
 import asyncio
 import json
@@ -9,6 +9,7 @@ from mcp.server.fastmcp import FastMCP
 from starlette.testclient import TestClient
 
 from src.admin_api import Backends, ProbeError, Slot, Usage, check, register
+from src.tokens import TokenStore
 
 REAL_CLIENT = httpx.AsyncClient
 
@@ -25,7 +26,7 @@ def make(tmp_path, defaults=None, probe=None, local=True, playground=None):
 
     usage, backends = Usage(), Backends(tmp_path / "backends.json", defaults)
     mcp = FastMCP("t")
-    register(mcp, service="Test", admin_password="pw", usage=usage, backends=backends, status=status, playground=playground,
+    register(mcp, service="Test", admin_password="pw", usage=usage, backends=backends, tokens=TokenStore(tmp_path / "tokens.json", "t_"), status=status, playground=playground,
              slots=[Slot("one", "Model one", "help", probe or default_probe, "http://127.0.0.1:1", local)])
     return TestClient(mcp.streamable_http_app()), usage, backends, seen
 
@@ -51,7 +52,7 @@ def test_connect_descriptor_is_returned_with_the_status_and_is_optional(tmp_path
         async def status():
             return []
 
-        register(mcp, service="Test", admin_password="pw", usage=Usage(), backends=Backends(tmp_path / "b.json"),
+        register(mcp, service="Test", admin_password="pw", usage=Usage(), backends=Backends(tmp_path / "b.json"), tokens=TokenStore(tmp_path / "tokens.json", "t_"),
                  status=status, slots=[], **extra)
         client = TestClient(mcp.streamable_http_app())
         assert client.get("/admin/status").status_code == 401
@@ -266,3 +267,28 @@ def test_a_connection_removed_by_hand_falls_back_to_the_environment(tmp_path):
     c.put("/admin/backends/one", headers=PW, json={"connection": "a"})
     (tmp_path / "backends.json").write_text(json.dumps({"one": {"use": "a"}}), "utf-8")
     assert backends.get("one") == ("http://env:1", "")
+
+
+def test_tokens_need_the_admin_password(tmp_path):
+    c, *_ = make(tmp_path)
+    assert c.get("/admin/tokens").status_code == 401
+    assert c.post("/admin/tokens", json={"name": "a"}).status_code == 401
+    assert c.delete("/admin/tokens/x").status_code == 401
+
+
+def test_a_token_is_created_listed_without_its_secret_and_revoked(tmp_path):
+    c, *_ = make(tmp_path)
+    made = c.post("/admin/tokens", json={"name": " armory ", "rate": 30, "expires_days": 7}, headers=PW).json()
+    assert made["token"].startswith("t_") and made["name"] == "armory" and made["rate"] == 30
+    listed = c.get("/admin/tokens", headers=PW).json()["tokens"]
+    assert [row["id"] for row in listed] == [made["id"]] and "token" not in listed[0] and "hash" not in listed[0]
+    assert c.delete(f"/admin/tokens/{made['id']}", headers=PW).json() == {"ok": True}
+    assert c.delete(f"/admin/tokens/{made['id']}", headers=PW).status_code == 404
+    assert c.get("/admin/tokens", headers=PW).json()["tokens"] == []
+
+
+def test_token_input_is_checked(tmp_path):
+    c, *_ = make(tmp_path)
+    for body in ({}, {"name": ""}, {"name": "x" * 65}, {"name": 3}, {"name": "a", "rate": 0}, {"name": "a", "rate": "5"},
+                 {"name": "a", "expires_days": 4000}, {"name": "a", "rate": True}):
+        assert c.post("/admin/tokens", json=body, headers=PW).status_code == 422, body

@@ -13,6 +13,7 @@ from mcp.shared._httpx_utils import create_mcp_http_client
 from src.app import build_app
 from src.config import Settings
 from tests.conftest import FakeEngine, audio
+from tests.seed import seed_token
 
 TOKEN = {"X-Internal-Token": "tok"}
 ANN = {"requester": {"username": "ann", "email": "a@x"}}
@@ -27,7 +28,7 @@ def free_port() -> int:
 @pytest.fixture
 def port(tmp_path):
     port = free_port()
-    settings = Settings(host="127.0.0.1", port=port, data_dir=tmp_path, internal_token="tok", max_seconds=10)
+    settings = seed_token(Settings(host="127.0.0.1", port=port, data_dir=tmp_path, admin_password="pw", max_seconds=10), "tok")
     server = uvicorn.Server(uvicorn.Config(build_app(settings, FakeEngine()), host="127.0.0.1", port=port, log_level="warning"))
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
