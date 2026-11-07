@@ -7,11 +7,19 @@ import sys
 import uvicorn
 
 from src.app import build_app
-from src.config import load_settings
+from src.config import PROJECT_DIR, load_settings
+from src.runtime import load_env_file
 from src.options import live, make_config
 
 
 def main() -> None:
+    if "--dotenv" in sys.argv[1:]:  # run.bat asks for it; Docker and the tests never read .env
+        env_file = PROJECT_DIR / ".env"
+        if env_file.is_file():
+            names = load_env_file(env_file)
+            print(f".env: loaded {', '.join(names) or 'no variables'} (names only; a real environment variable wins)", flush=True)
+        else:
+            print(".env: no file in the service folder", flush=True)
     settings = load_settings()
     if settings.exposed_without_token:
         sys.exit("Scribe refuses to start: SCRIBE_HOST is not a loopback address and INTERNAL_API_TOKEN is empty.")

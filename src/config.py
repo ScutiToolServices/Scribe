@@ -8,7 +8,6 @@ import os
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from dotenv import load_dotenv
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
@@ -58,7 +57,6 @@ class Settings:
 
 
 def _from_environment() -> Settings:
-    load_dotenv(PROJECT_DIR / ".env")
     env = os.environ.get
     return Settings(
         host=env("SCRIBE_HOST", "127.0.0.1"),

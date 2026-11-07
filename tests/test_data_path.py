@@ -7,7 +7,6 @@ from src.options import make_config
 
 
 def first_folder(tmp_path, monkeypatch, saved):
-    monkeypatch.setattr("src.config.load_dotenv", lambda *args, **kwargs: None, raising=False)
     monkeypatch.setenv("SCRIBE_DATA_DIR", str(tmp_path / "first"))
     monkeypatch.setenv("SCRIBE_ADMIN_PASSWORD", "pw")
     (tmp_path / "first").mkdir(exist_ok=True)

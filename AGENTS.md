@@ -8,7 +8,7 @@ This file is the one instruction file for every coding agent; `CLAUDE.md` only i
 ## Commands (from this folder, venv `.venv`, managed by uv)
 - Install: `uv sync` (`winget install astral-sh.uv` if missing; on this machine set `UV_CACHE_DIR=D:/User/.uv-cache`)
 - Test: `uv run pytest -q`
-- Run: `run.bat run`, or `uv run python -m src.run` (the model downloads into `.data/models` on first transcription)
+- Run: `run.bat run`, or `uv run python -m src.run` (add `--dotenv` to load `.env`) (the model downloads into `.data/models` on first transcription)
 
 ## Rules
 - Follow the `tool-service-parity` skill and `AI/ToolServices/_docs/SHARED-FEATURES.md` (what must match in every tool service) and `AI/ToolServices/_docs/SERVICE-SPECIFIC.md` (what differs on purpose). A change to a shared feature goes to every tool service; a new difference goes into `SERVICE-SPECIFIC.md` in the same change.

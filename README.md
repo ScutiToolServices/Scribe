@@ -12,7 +12,7 @@ Speech to text for Citadel and Ember. A user attaches an English audio file (mp3
 
 ## Setup
 
-- Run: `uv run python -m src.run` (first `uv sync`). Docker: `docker compose up -d --build` (the Citadel network must exist).
+- Run: `run.bat run` (loads `.env`) or `uv run python -m src.run --dotenv` (first `uv sync`). Docker: `docker compose up -d --build` (the Citadel network must exist).
 
 ## Limits worth knowing
 
