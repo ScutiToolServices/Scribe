@@ -49,6 +49,44 @@ INSTRUCTIONS = (
 )
 
 
+CONNECT = {
+    "host": "scribe",
+    "port": 8091,
+    "paths": [
+        {
+            "label": "MCP, for Armory",
+            "method": "POST",
+            "path": "/mcp"
+        },
+        {
+            "label": "Upload audio",
+            "method": "POST",
+            "path": "/api/files"
+        },
+        {
+            "label": "Transcribe",
+            "method": "POST",
+            "path": "/api/transcribe"
+        },
+        {
+            "label": "Partial transcript",
+            "method": "POST",
+            "path": "/api/transcribe-partial"
+        },
+        {
+            "label": "Live dictation",
+            "method": "WS",
+            "path": "/api/stream"
+        },
+        {
+            "label": "Health, no token",
+            "method": "GET",
+            "path": "/health"
+        }
+    ]
+}
+
+
 def build_app(settings: Settings, engine: SttEngine | None = None, config: Config | None = None) -> Starlette:
     """`config` (default: from SCRIBE_ADMIN_PASSWORD, see options.make_config) makes the options in options.py
     changeable on /admin/ while running; without it they stay as the environment set them."""
@@ -86,7 +124,7 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
 
     @mcp.custom_route("/health", methods=["GET"])
     async def health(request: Request) -> Response:
-        return JSONResponse({"ok": True})
+        return JSONResponse({"ok": True, "ready": backends.get("whisper") is not None})
 
     @mcp.custom_route("/api/transcribe", methods=["POST"])
     @mcp.custom_route("/api/files", methods=["POST"])
@@ -158,7 +196,7 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
                 {"label": "Speech model runs", "value": "in a model service" if remote else "not connected"}]
 
     if config is not None:
-        register(mcp, service="Scribe", admin_password=base.admin_password, usage=usage, backends=backends, status=status,
+        register(mcp, connect=CONNECT, service="Scribe", admin_password=base.admin_password, usage=usage, backends=backends, status=status,
                  playground=PLAYGROUND, slots=[
             Slot("whisper", "Speech to text", "The STTWhisperModel service that transcribes. Its model must match Scribe's model option, which keys the transcript cache.",
                  probe_whisper, "http://127.0.0.1:9230", local=False),

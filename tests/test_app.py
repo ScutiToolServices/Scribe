@@ -13,7 +13,7 @@ def make(settings, **changes):
 
 
 def test_health(settings):
-    assert make(settings).get("/health").json() == {"ok": True}
+    assert make(settings).get("/health").json() == {"ok": True, "ready": False}
 
 
 def test_upload_requires_identity(settings):

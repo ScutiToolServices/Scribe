@@ -41,6 +41,25 @@ def test_playground_descriptor_requires_admin_auth_and_is_returned_unchanged(tmp
     assert c.get("/admin/status", headers=PW).json()["playground"] == descriptor
 
 
+def test_connect_descriptor_is_returned_with_the_status_and_is_optional(tmp_path):
+    connect = {"host": "svc", "port": 1, "paths": [{"label": "Health", "method": "GET", "path": "/health"}]}
+    seen = {}
+
+    def run(**extra):
+        mcp = FastMCP("t")
+
+        async def status():
+            return []
+
+        register(mcp, service="Test", admin_password="pw", usage=Usage(), backends=Backends(tmp_path / "b.json"),
+                 status=status, slots=[], **extra)
+        client = TestClient(mcp.streamable_http_app())
+        assert client.get("/admin/status").status_code == 401
+        return client.get("/admin/status", headers=PW).json()["connect"]
+
+    assert run(connect=connect) == connect and run() is None
+
+
 def test_playground_descriptor_is_optional(tmp_path):
     c, *_ = make(tmp_path)
     assert c.get("/admin/status", headers=PW).json()["playground"] is None

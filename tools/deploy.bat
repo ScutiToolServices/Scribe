@@ -3,9 +3,11 @@ rem Deploy menu: publish the code to the live branch and/or copy the git-ignored
 rem deployment machine in ONE ssh session (one password prompt).
 rem The server refuses root over ssh, so we log in as a normal user. If the copy cannot write,
 rem option 6 copies the one-time "chown" command and opens the server's web terminal (root shell).
-rem Scribe ships a Dockerfile and docker-compose.yml; the server builds the image from the live branch.
-rem Override the target: set DEPLOY_HOST / DEPLOY_DIR / DEPLOY_WEB_PORT before running.
+rem The service runs from its own docker-compose.yml in the deploy folder, with .env beside it.
+rem Override the target: set DEPLOY_HOST / DEPLOY_DIR / DEPLOY_WEB_PORT before running, or put them in the git-ignored
+rem tools\deploy.local.bat (copy tools\deploy.local.example.bat) so the address stays out of the repository.
 setlocal enabledelayedexpansion
+if exist "%~dp0deploy.local.bat" call "%~dp0deploy.local.bat"
 if not defined DEPLOY_HOST set "DEPLOY_HOST=lex@scutiserver1.local"
 if not defined DEPLOY_DIR set "DEPLOY_DIR=/media/ZimaOS-HD/Apps/Scribe"
 if not defined DEPLOY_WEB_PORT set "DEPLOY_WEB_PORT=7681"
@@ -69,7 +71,7 @@ if not "!RC!"=="0" (
     exit /b 1
 )
 echo Done.
-call :reminder ".env is on the server. In the web terminal:" "docker compose up -d --build" "(run git pull first if the code changed)"
+call :reminder ".env is on the server. In the web terminal:" "docker compose up -d --build" "(run git pull here first if the code changed)"
 exit /b 0
 
 rem :add <path relative to the Scribe root, same path on the server>
@@ -99,7 +101,8 @@ echo.
 echo ---- NEXT ON THE SERVER ----
 echo %~1
 echo   cd %DEPLOY_DIR%
-echo   %~2
+set "SHOWCMD=%~2"
+echo   !SHOWCMD!
 if not "%~3"=="" echo   %~3
 echo ----------------------------
 exit /b 0

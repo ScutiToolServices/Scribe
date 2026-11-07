@@ -25,7 +25,7 @@ services:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/health')"]
       interval: 15s
       timeout: 5s
-      start_period: 120s
+      start_period: 30s
     networks: [citadel]
 
 volumes:

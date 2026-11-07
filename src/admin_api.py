@@ -242,8 +242,11 @@ def _valid_url(url: str) -> bool:
 
 
 def register(mcp: Any, *, service: str, admin_password: str, usage: Usage, backends: Backends, slots: list[Slot],
-             status: Callable[[], Awaitable[list[dict[str, str]]]], playground: dict[str, Any] | None = None) -> None:
-    """Add shared admin routes and the optional public-request playground descriptor; never include credentials."""
+             status: Callable[[], Awaitable[list[dict[str, str]]]], playground: dict[str, Any] | None = None,
+             connect: dict[str, Any] | None = None) -> None:
+    """Add shared admin routes, the optional public-request playground descriptor and the optional `connect` descriptor
+    ({"host": docker name, "port": int, "paths": [{"label", "method", "path"}]}, shown on the page as the addresses other
+    services can use); never include credentials."""
     by_key = {slot.key: slot for slot in slots}
 
     def denied(request: Request) -> Response | None:
@@ -283,7 +286,8 @@ def register(mcp: Any, *, service: str, admin_password: str, usage: Usage, backe
     async def admin_status(request: Request) -> Response:
         if (refused := denied(request)) is not None:
             return refused
-        return JSONResponse({"service": service, "items": await status(), "usage": usage.snapshot(), "playground": playground})
+        return JSONResponse({"service": service, "items": await status(), "usage": usage.snapshot(), "playground": playground,
+                             "connect": connect})
 
     @mcp.custom_route("/admin/backends", methods=["GET"])
     async def admin_backends(request: Request) -> Response:

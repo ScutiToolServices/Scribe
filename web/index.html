@@ -61,6 +61,12 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .result { min-height: 1.4em; margin: 8px 0 0; font-size: .92em; overflow-wrap: anywhere; }
 .result.ok { color: var(--ok); }
 .result.bad { color: var(--error); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.connect { display: grid; gap: 8px; margin-top: 12px; }
+.connect-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; }
+.connect-row p { margin: 0; }
+.connect-row code { font-size: .92em; overflow-wrap: anywhere; }
+.connect-group { margin: 14px 0 0; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -81,6 +87,12 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   </section>
   <div id="panel" hidden>
     <section id="playground" class="card"></section>
+    <section class="card" aria-labelledby="connect-title">
+      <h2 id="connect-title">Connect to this service</h2>
+      <p class="muted">Addresses other services can use. Pick the row that matches where the caller runs. Every call except <code>/health</code> needs the internal token in <code>X-Internal-Token</code>; HTTP routes also need the requester name in <code>X-Requester-Username</code>.</p>
+      <div id="connect-list" class="connect"></div>
+      <p id="connect-status" class="sr-only" role="status"></p>
+    </section>
     <section class="card" aria-labelledby="status-title">
       <h2 id="status-title">Status</h2>
       <div id="tiles" class="tiles"></div>
@@ -171,7 +183,45 @@ function ago(epoch) {
   const s = Math.max(0, Math.round(Date.now() / 1000 - epoch));
   return s < 60 ? "just now" : duration(s) + " ago";
 }
+
+/* Connect card: the addresses other services can use, from this page's own address and the service's `connect` data. */
+let connectShown = "";
+function connectRow(label, url, note) {
+  const text = el("div", {}, el("p", {textContent: label}), el("code", {textContent: url}));
+  if (note) text.append(el("p", {className: "muted", textContent: note, style: "margin:0"}));
+  const button = el("button", {type: "button", className: "small", textContent: "Copy"});
+  button.setAttribute("aria-label", "Copy " + url);
+  button.onclick = async () => {
+    let copied = false;
+    try { await navigator.clipboard.writeText(url); copied = true; } catch {}
+    button.textContent = copied ? "Copied" : "Copy failed";
+    $("connect-status").textContent = copied ? "Copied " + url : "Copy failed. Select the address and copy it manually.";
+    setTimeout(() => { button.textContent = "Copy"; }, 2000);
+  };
+  return el("div", {className: "connect-row"}, text, button);
+}
+function renderConnect(c) {
+  const key = JSON.stringify(c || null);
+  if (!c || key === connectShown) return;
+  connectShown = key;
+  const seen = new Set(), rows = [];
+  const add = (label, url, note) => { if (!seen.has(url)) { seen.add(url); rows.push(connectRow(label, url, note)); } };
+  const group = title => rows.push(el("p", {className: "connect-group", textContent: title}));
+  group("Addresses");
+  add("The address you opened this page with", location.origin, "Use this from other machines when it is a LAN name or IP.");
+  const published = location.port || c.port;  // the host port may differ from the container port
+  add("The same PC", "http://127.0.0.1:" + published, "A program on this machine.");
+  add("Another Docker container", "http://" + c.host + ":" + c.port, "On the same Docker network (citadel_core).");
+  add("A Docker container calling this PC", "http://host.docker.internal:" + published, "Docker Desktop, or Linux with host-gateway.");
+  group("Endpoints");
+  for (const p of c.paths) {
+    const base = p.method === "WS" ? location.origin.replace(/^http/, "ws") : location.origin;
+    add(p.label + " (" + p.method + ")", base + p.path, p.note);
+  }
+  $("connect-list").replaceChildren(...rows);
+}
 function showStatus(data) {
+  renderConnect(data.connect);
   if (!playground && data.playground) playground = Playground.mount($("playground"), data.playground, {secrets: () => [password]});
   name(data.service);
   const u = data.usage;

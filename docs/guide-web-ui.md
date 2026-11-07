@@ -2,6 +2,10 @@
 
 With the service's admin password configured, open `/admin/` and sign in to manage status, model backends and settings. Public request authentication remains separate from that admin password.
 
+## Connect to this service
+
+The **Connect to this service** card lists the addresses other services can use: the address you opened the page with, the same PC (`127.0.0.1`), another Docker container on the same network, and a Docker container calling this PC (`host.docker.internal`), then every endpoint with its method and a **Copy** button. Calls need the internal token in `X-Internal-Token`; HTTP routes also need `X-Requester-Username`.
+
 ## Try it: send a real request
 
 1. Sign in to `/admin/` and find **Try it**.
