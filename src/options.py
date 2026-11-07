@@ -53,7 +53,7 @@ def schema(base: Settings) -> list[Setting]:
 
 
 def make_config(base: Settings) -> Config | None:
-    """None, so nothing is changeable at run time, unless SCRIBE_ADMIN_PASSWORD is set."""
+    """None, so nothing is changeable at run time, unless SERVICE_ADMIN_PASSWORD is set."""
     return Config(base.state_dir / "settings.json", schema(base)) if base.admin_password else None
 
 

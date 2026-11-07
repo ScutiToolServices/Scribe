@@ -32,7 +32,7 @@ from src.service import ScribeService
 from src.store import AudioStore
 from src.streaming import serve_stream
 
-WEB_DIR = Path(os.environ.get("SCRIBE_WEB_DIR") or PROJECT_DIR / "web")
+WEB_DIR = Path(os.environ.get("SERVICE_WEB_DIR") or PROJECT_DIR / "web")
 
 PLAYGROUND = {"operations": [{
     "label": "Transcribe", "route": "/api/transcribe", "method": "POST", "encoding": "raw", "response": "json",
@@ -88,7 +88,7 @@ CONNECT = {
 
 
 def build_app(settings: Settings, engine: SttEngine | None = None, config: Config | None = None) -> Starlette:
-    """`config` (default: from SCRIBE_ADMIN_PASSWORD, see options.make_config) makes the options in options.py
+    """`config` (default: from SERVICE_ADMIN_PASSWORD, see options.make_config) makes the options in options.py
     changeable on /admin/ while running; without it they stay as the environment set them."""
     config = config if config is not None else make_config(settings)
     base, settings = settings, live(settings, config)

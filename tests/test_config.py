@@ -16,10 +16,10 @@ def test_defaults_fit_armory_call_budget():
 
 
 def test_environment_overrides(monkeypatch, tmp_path):
-    monkeypatch.setenv("SCRIBE_PORT", "9001")
-    monkeypatch.setenv("SCRIBE_MAX_SECONDS", "90")
-    monkeypatch.setenv("SCRIBE_TTL_HOURS", "2")
-    monkeypatch.setenv("SCRIBE_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("SERVICE_PORT", "9001")
+    monkeypatch.setenv("SERVICE_MAX_SECONDS", "90")
+    monkeypatch.setenv("SERVICE_TTL_HOURS", "2")
+    monkeypatch.setenv("SERVICE_DATA_DIR", str(tmp_path))
     settings = load_settings()
     assert settings.port == 9001 and settings.max_seconds == 90
     assert settings.ttl_seconds == 7200 and settings.audio_dir == tmp_path / "audio"

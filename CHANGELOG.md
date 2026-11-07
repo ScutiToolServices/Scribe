@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### Breaking: common service environment variables
+
+Service-owned environment variables now use `SERVICE_*`. Old names are no longer read.
+Rename old names once in your real `.env`, Compose `environment:` block, and CI/secret settings.
+
+| Old name | New name |
+|---|---|
+| `SCRIBE_ADMIN_PASSWORD` | `SERVICE_ADMIN_PASSWORD` |
+| `SCRIBE_BIND` | `SERVICE_BIND` |
+| `SCRIBE_CONCURRENCY` | `SERVICE_CONCURRENCY` |
+| `SCRIBE_DATA_DIR` | `SERVICE_DATA_DIR` |
+| `SCRIBE_FFMPEG` | `SERVICE_FFMPEG` |
+| `SCRIBE_HOST` | `SERVICE_HOST` |
+| `SCRIBE_MAX_BYTES` | `SERVICE_MAX_BYTES` |
+| `SCRIBE_MAX_SECONDS` | `SERVICE_MAX_SECONDS` |
+| `SCRIBE_MODEL` | `SERVICE_MODEL` |
+| `SCRIBE_PORT` | `SERVICE_PORT` |
+| `SCRIBE_QUOTA_MB` | `SERVICE_QUOTA_MB` |
+| `SCRIBE_STREAM_CAPACITY` | `SERVICE_STREAM_CAPACITY` |
+| `SCRIBE_STREAM_IDLE_S` | `SERVICE_STREAM_IDLE_S` |
+| `SCRIBE_STREAM_MAX_FRAME_BYTES` | `SERVICE_STREAM_MAX_FRAME_BYTES` |
+| `SCRIBE_STREAM_WINDOW_S` | `SERVICE_STREAM_WINDOW_S` |
+| `SCRIBE_TIMEOUT_S` | `SERVICE_TIMEOUT_S` |
+| `SCRIBE_TTL_HOURS` | `SERVICE_TTL_HOURS` |
+| `SCRIBE_WEB_DIR` | `SERVICE_WEB_DIR` |
+
 - Default service port moves from 8091 to 29401. Update any explicit port in your real `.env`, saved model-service connections in `backends.json`, and browser or MCP client configurations once; model-service connection ports also move to the new model port blocks. Docker users who used the Compose default receive the new host and container ports together; explicit host-port overrides remain in effect until changed.
 - Model connection labels, Docker CONNECT hosts and documentation use the purpose-prefixed model-service names. Update saved model-service connections to the renamed load balancer hosts using the current connection defaults.
 

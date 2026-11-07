@@ -18,9 +18,9 @@ Speech to text for Citadel and Ember, with HTTP and MCP on port 29401. A user at
 
 - Limits: 25 MB, 150 s of audio, 200 MB per user. Uploads and transcripts are deleted after 24 hours.
 - Privacy: user audio sits on this machine for 24 hours.
-- Live limits: 150 s total audio (or lower `SCRIBE_MAX_SECONDS`), `SCRIBE_MAX_BYTES`, 64,000 bytes per frame, 15 s idle. The wall deadline allows the audio limit plus `SCRIBE_TIMEOUT_S` for inference. Unstable speech that cannot commit within the 30 s audio window ends with a sanitized error; it is never silently discarded. Saturated WebSockets accept then close with 1013 so proxies can detect fallback; unauthorized sockets close before acceptance. Fallback HTTP requests return 503 when their own admission pool is full.
-- Settings: `SCRIBE_STREAM_CAPACITY=2` caps simultaneous WebSockets and separately caps ephemeral HTTP requests, allowing fallback when sockets are full. `SCRIBE_STREAM_MAX_FRAME_BYTES=64000`, `SCRIBE_STREAM_IDLE_S=15`, and `SCRIBE_STREAM_WINDOW_S=30` tune the other bounds. Both paths share `SCRIBE_CONCURRENCY` with ordinary transcription. A timed-out worker keeps its inference slot until it actually finishes. The server queues at most four incoming WebSocket messages per connection.
-- Decoding is bounded before transcription: ffmpeg emits at most one second beyond the audio limit (to detect oversize input), rejects that oversize PCM, and is killed and reaped on cancellation or `SCRIBE_TIMEOUT_S` decode timeout.
+- Live limits: 150 s total audio (or lower `SERVICE_MAX_SECONDS`), `SERVICE_MAX_BYTES`, 64,000 bytes per frame, 15 s idle. The wall deadline allows the audio limit plus `SERVICE_TIMEOUT_S` for inference. Unstable speech that cannot commit within the 30 s audio window ends with a sanitized error; it is never silently discarded. Saturated WebSockets accept then close with 1013 so proxies can detect fallback; unauthorized sockets close before acceptance. Fallback HTTP requests return 503 when their own admission pool is full.
+- Settings: `SERVICE_STREAM_CAPACITY=2` caps simultaneous WebSockets and separately caps ephemeral HTTP requests, allowing fallback when sockets are full. `SERVICE_STREAM_MAX_FRAME_BYTES=64000`, `SERVICE_STREAM_IDLE_S=15`, and `SERVICE_STREAM_WINDOW_S=30` tune the other bounds. Both paths share `SERVICE_CONCURRENCY` with ordinary transcription. A timed-out worker keeps its inference slot until it actually finishes. The server queues at most four incoming WebSocket messages per connection.
+- Decoding is bounded before transcription: ffmpeg emits at most one second beyond the audio limit (to detect oversize input), rejects that oversize PCM, and is killed and reaped on cancellation or `SERVICE_TIMEOUT_S` decode timeout.
 
 ### Releasing
 
@@ -30,11 +30,11 @@ A plain publish (`run.bat`, Deploy, option 1) only updates the `live` branch, so
 
 ## Admin page
 
-With `SCRIBE_ADMIN_PASSWORD` set, `/admin/` (header `X-Admin-Password`) has four parts:
+With `SERVICE_ADMIN_PASSWORD` set, `/admin/` (header `X-Admin-Password`) has four parts:
 
 - **Status**: what the service runs and for how long, plus the model and where it runs.
 - **Usage**: calls, errors and average time per user since the service started (kept in memory, so a restart clears it).
-- **Model services**: speech to text runs at a `STT_Whisper_Model` address (Scribe has no local model) (address and token are saved on the admin page only). Keep `SCRIBE_MODEL` equal to the model the service runs: it keys the transcript cache. Pick a saved connection or **Another address**, set the address and token, press **Test connection** (it calls the other service with that token), then **Save**. A change applies to the next call; the token is stored in `.data/backends.json`, never shown again, and `Use the environment value` drops the saved one (back to not connected).
+- **Model services**: speech to text runs at a `STT_Whisper_Model` address (Scribe has no local model) (address and token are saved on the admin page only). Keep `SERVICE_MODEL` equal to the model the service runs: it keys the transcript cache. Pick a saved connection or **Another address**, set the address and token, press **Test connection** (it calls the other service with that token), then **Save**. A change applies to the next call; the token is stored in `.data/backends.json`, never shown again, and `Use the environment value` drops the saved one (back to not connected).
 - **Settings**: the options saved in `.data/settings.json`.
 
 ## Tests
