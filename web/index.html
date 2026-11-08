@@ -134,6 +134,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
         <div class="field"><label for="conn-name">Name</label><input id="conn-name" type="text" maxlength="40" autocomplete="off" spellcheck="false" required></div>
         <div class="field"><label for="conn-url">Address</label><input id="conn-url" type="url" autocomplete="off" spellcheck="false" required></div>
         <div class="field"><label for="conn-token">Token</label><input id="conn-token" type="password" autocomplete="new-password"></div>
+        <div class="field" id="conn-admin-field" hidden><label for="conn-admin">Model admin password</label><input id="conn-admin" type="password" autocomplete="new-password"></div>
         <div class="row"><button class="primary small" id="conn-save">Save connection</button></div>
       </form>
     </section>
@@ -315,10 +316,12 @@ function slotCard(slot) {
   const url = el("input", {id: id + "-url", type: "url", value: slot.url, placeholder: slot.example, autocomplete: "off", spellcheck: false});
   const token = el("input", {id: id + "-token", type: "password", autocomplete: "new-password",
     placeholder: slot.token_set ? "Saved. Type a new one to replace it." : "No token saved"});
+  const admin = el("input", {id: id + "-admin", type: "password", autocomplete: "new-password",
+    placeholder: slot.admin_set ? "Saved. Type a new one to replace it." : "Required"});
   const result = el("p", {className: "result", role: "status"});
   const picked = () => mode.value.startsWith("c:") ? mode.value.slice(2) : "";
   const sync = () => {
-    url.disabled = token.disabled = mode.value !== "remote";
+    url.disabled = token.disabled = admin.disabled = mode.value !== "remote";
     const c = connections.find(x => x.name === picked());
     if (c) url.value = c.url;
   };
@@ -334,6 +337,7 @@ function slotCard(slot) {
   save.onclick = () => run(save, async () => {
     const body = values();
     if (token.value && !picked()) body.token = token.value;
+    if (admin.value && !picked()) body.admin_password = admin.value;
     show(await call("backends/" + slot.key, "PUT", body));
     flash("Saved " + slot.label);
   });
@@ -362,16 +366,18 @@ function slotCard(slot) {
     el("div", {className: "field"}, el("label", {htmlFor: mode.id, textContent: "Runs"}), mode),
     el("div", {className: "field"}, el("label", {htmlFor: url.id, textContent: "Address"}), url),
     el("div", {className: "field"}, el("label", {htmlFor: token.id, textContent: "Token"}), token),
+    ...(slot.admin ? [el("div", {className: "field"}, el("label", {htmlFor: admin.id, textContent: slot.admin}), admin)] : []),
     actions, result);
 }
 function show(data) {
   name(data.service);
   connections = data.connections || [];
   $("slots").replaceChildren(...data.backends.map(slotCard));
+  $("conn-admin-field").hidden = !data.backends.some(s => s.admin);
   $("conns").replaceChildren(...connections.map(c => {
     const edit = el("button", {type: "button", className: "small", textContent: "Edit"});
     edit.setAttribute("aria-label", "Edit " + c.name);
-    edit.onclick = () => { $("conn-name").value = c.name; $("conn-url").value = c.url; $("conn-token").value = ""; $("conn-token").placeholder = c.token_set ? "Saved. Type a new one to replace it." : "No token saved"; };
+    edit.onclick = () => { $("conn-name").value = c.name; $("conn-url").value = c.url; $("conn-token").value = ""; $("conn-token").placeholder = c.token_set ? "Saved. Type a new one to replace it." : "No token saved"; $("conn-admin").value = ""; $("conn-admin").placeholder = c.admin_set ? "Saved. Type a new one to replace it." : "No password saved"; };
     const del = el("button", {type: "button", className: "small", textContent: "Delete"});
     del.setAttribute("aria-label", "Delete " + c.name);
     del.onclick = async () => {
@@ -379,7 +385,7 @@ function show(data) {
       try { show(await call("connections/" + encodeURIComponent(c.name), "DELETE")); flash("Deleted " + c.name); } catch (error) { fail(error); }
     };
     return el("div", {className: "slot"}, el("h3", {textContent: c.name, style: "margin:0;font-size:1em"}),
-      el("small", {textContent: c.url + (c.token_set ? " · token saved" : " · no token") + (c.used_by.length ? " · used by " + c.used_by.join(", ") : "")}),
+      el("small", {textContent: c.url + (c.token_set ? " · token saved" : " · no token") + (c.admin_set ? " · admin password saved" : "") + (c.used_by.length ? " · used by " + c.used_by.join(", ") : "")}),
       el("div", {className: "row"}, edit, del));
   }));
 }
@@ -387,6 +393,7 @@ $("conn-form").onsubmit = async event => {
   event.preventDefault(); $("error").textContent = "";
   const body = {url: $("conn-url").value.trim()};
   if ($("conn-token").value) body.token = $("conn-token").value;
+  if ($("conn-admin").value) body.admin_password = $("conn-admin").value;
   try {
     const name = $("conn-name").value.trim();
     show(await call("connections/" + encodeURIComponent(name), "PUT", body));

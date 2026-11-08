@@ -14,7 +14,7 @@ from src.tokens import TokenStore
 REAL_CLIENT = httpx.AsyncClient
 
 
-def make(tmp_path, defaults=None, probe=None, local=True, playground=None):
+def make(tmp_path, defaults=None, probe=None, local=True, playground=None, admin=""):
     seen = []
 
     async def default_probe(url, token):
@@ -27,7 +27,7 @@ def make(tmp_path, defaults=None, probe=None, local=True, playground=None):
     usage, backends = Usage(), Backends(tmp_path / "backends.json", defaults)
     mcp = FastMCP("t")
     register(mcp, service="Test", admin_password="pw", usage=usage, backends=backends, tokens=TokenStore(tmp_path / "tokens.json", "t_"), status=status, playground=playground,
-             slots=[Slot("one", "Model one", "help", probe or default_probe, "http://127.0.0.1:1", local)])
+             slots=[Slot("one", "Model one", "help", probe or default_probe, "http://127.0.0.1:1", local, admin)])
     return TestClient(mcp.streamable_http_app()), usage, backends, seen
 
 
@@ -218,7 +218,7 @@ def test_a_slot_can_use_a_saved_connection_shared_with_other_slots(tmp_path):
     c, _, backends, seen = make(tmp_path)
     saved = c.put("/admin/connections/gpu box", headers=PW, json={"url": "http://10.0.0.5:29320/", "token": "s3cret"})
     assert saved.status_code == 200
-    assert saved.json()["connections"] == [{"name": "gpu box", "url": "http://10.0.0.5:29320", "token_set": True, "used_by": []}]
+    assert saved.json()["connections"] == [{"name": "gpu box", "url": "http://10.0.0.5:29320", "token_set": True, "admin_set": False, "used_by": []}]
     assert "s3cret" not in saved.text
     listing = c.put("/admin/backends/one", headers=PW, json={"connection": "gpu box"}).json()
     assert listing["backends"][0]["connection"] == "gpu box" and listing["backends"][0]["mode"] == "remote"
@@ -292,3 +292,30 @@ def test_token_input_is_checked(tmp_path):
     for body in ({}, {"name": ""}, {"name": "x" * 65}, {"name": 3}, {"name": "a", "rate": 0}, {"name": "a", "rate": "5"},
                  {"name": "a", "expires_days": 4000}, {"name": "a", "rate": True}):
         assert c.post("/admin/tokens", json=body, headers=PW).status_code == 422, body
+
+
+def test_a_slot_with_an_admin_label_needs_the_model_admin_password_with_its_address(tmp_path):
+    c, _, backends, _ = make(tmp_path, local=False, admin="Model admin password")
+    assert c.get("/admin/backends", headers=PW).json()["backends"][0]["admin"] == "Model admin password"
+    refused = c.put("/admin/backends/one", headers=PW, json={"url": "http://m:1", "token": "t"})
+    assert refused.status_code == 422 and "Model admin password" in refused.json()["detail"]
+    assert c.put("/admin/backends/one", headers=PW, json={"url": "http://m:1", "admin_password": "secret"}).status_code == 200
+    assert backends.admin_password("one") == "secret"
+    shown = c.get("/admin/backends", headers=PW).json()
+    assert shown["backends"][0]["admin_set"] is True and "secret" not in json.dumps(shown)
+    # later saves keep it; an empty one clears it, after which the address is refused again
+    assert c.put("/admin/backends/one", headers=PW, json={"url": "http://m:2"}).status_code == 200
+    assert backends.admin_password("one") == "secret"
+    c.put("/admin/connections/gpu", headers=PW, json={"url": "http://g:1"})
+    assert c.put("/admin/backends/one", headers=PW, json={"connection": "gpu"}).status_code == 422
+    c.put("/admin/connections/gpu", headers=PW, json={"url": "http://g:1", "admin_password": "g-secret"})
+    assert c.put("/admin/backends/one", headers=PW, json={"connection": "gpu"}).status_code == 200
+    assert backends.admin_password("one") == "g-secret"
+    c.put("/admin/connections/gpu", headers=PW, json={"url": "http://g:2"})
+    assert backends.connection_admin("gpu") == "g-secret"
+
+
+def test_a_slot_without_an_admin_label_never_asks_for_the_password(tmp_path):
+    c, _, backends, _ = make(tmp_path, local=False)
+    assert c.put("/admin/backends/one", headers=PW, json={"url": "http://m:1"}).status_code == 200
+    assert backends.admin_password("one") == ""

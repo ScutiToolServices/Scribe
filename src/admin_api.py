@@ -3,11 +3,12 @@ to the others). It adds, next to the existing /admin/settings:
 
   GET  /admin/status               uptime, usage per user, and service-specific items
   GET  /admin/backends             the model-service slots: local or a URL, whether a token is saved (never the token)
-  PUT  /admin/backends/{key}       {"url", "token"}: url "" = run it in this service; token omitted = keep the saved one
+  PUT  /admin/backends/{key}       {"url", "token", "admin_password"?}: url "" = run it in this service; token omitted = keep the saved one;
+                                   a slot with `admin` set needs the model's admin password with its address
   DELETE /admin/backends/{key}     forget the saved value, go back to the environment variable
   POST /admin/backends/{key}/test  {"url", "token"} or {"connection"} optional (the form's unsaved values); calls the model service
   PUT  /admin/backends/{key}       also takes {"connection": name}: use a saved connection (see below)
-  PUT  /admin/connections/{name}   {"url", "token"}: save a named model-service address, shared by every slot
+  PUT  /admin/connections/{name}   {"url", "token", "admin_password"?}: save a named model-service address, shared by every slot
   DELETE /admin/connections/{name} forget it (409 while a slot uses it)
   GET/POST /admin/tokens           the tokens callers (Armory, other services) send in X-Internal-Token; POST {"name",
                                    "rate"?, "expires_days"?} returns the plaintext token once
@@ -151,12 +152,12 @@ class Backends:
         row, source = self._row(key)
         url = (row.get("url") or "").strip().rstrip("/")
         use = (self._saved.get(key) or {}).get("use") if source == "saved" else None
-        return {"mode": "remote" if url else "local", "url": url, "token_set": bool(row.get("token")), "source": source,
+        return {"mode": "remote" if url else "local", "url": url, "token_set": bool(row.get("token")), "admin_set": bool(row.get("admin_password")), "source": source,
                 "connection": use if isinstance(use, str) else ""}
 
     def connections(self) -> list[dict[str, Any]]:
         self._load()
-        return [{"name": n, "url": r.get("url") or "", "token_set": bool(r.get("token")),
+        return [{"name": n, "url": r.get("url") or "", "token_set": bool(r.get("token")), "admin_set": bool(r.get("admin_password")),
                  "used_by": [k for k, v in self._saved.items() if k != CONNECTIONS and v.get("use") == n]}
                 for n, r in sorted(self._saved.get(CONNECTIONS, {}).items()) if isinstance(r, dict)]
 
@@ -165,28 +166,42 @@ class Backends:
         row = self._saved.get(CONNECTIONS, {}).get(name)
         return (row.get("url") or "", row.get("token") or "") if isinstance(row, dict) else None
 
+    def admin_password(self, key: str) -> str:
+        """The model service's admin password for the slot (from its connection when it uses one)."""
+        return self._row(key)[0].get("admin_password") or ""
+
+    def connection_admin(self, name: str) -> str:
+        self._load()
+        row = self._saved.get(CONNECTIONS, {}).get(name)
+        return (row.get("admin_password") or "") if isinstance(row, dict) else ""
+
     def use(self, key: str, name: str) -> None:
         """Point a slot at a saved connection."""
         self._load()
         self._write({**self._saved, key: {"use": name}})
 
-    def save_connection(self, name: str, url: str, token: str | None) -> None:
-        """`token` None keeps the current one; "" clears it."""
+    def save_connection(self, name: str, url: str, token: str | None, admin: str | None = None) -> None:
+        """`token` and `admin` None keep the current value; "" clears it."""
         self._load()
         known = self._saved.get(CONNECTIONS, {})
-        keep = (known.get(name) or {}).get("token") or ""
-        self._write({**self._saved, CONNECTIONS: {**known, name: {"url": url, "token": keep if token is None else token}}})
+        old = known.get(name) or {}
+        row = {"url": url, "token": (old.get("token") or "") if token is None else token}
+        if admin or (admin is None and old.get("admin_password")):
+            row["admin_password"] = (old.get("admin_password") or "") if admin is None else admin
+        self._write({**self._saved, CONNECTIONS: {**known, name: row}})
 
     def delete_connection(self, name: str) -> None:
         self._load()
         known = {n: r for n, r in self._saved.get(CONNECTIONS, {}).items() if n != name}
         self._write({**self._saved, CONNECTIONS: known})
 
-    def set(self, key: str, url: str, token: str | None) -> None:
-        """`token` None keeps the current one; "" clears it."""
+    def set(self, key: str, url: str, token: str | None, admin: str | None = None) -> None:
+        """`token` and `admin` None keep the current value; "" clears it."""
         row, _ = self._row(key)
-        keep = row.get("token") or ""
-        self._write({**self._saved, key: {"url": url, "token": keep if token is None else token}})
+        saved = {"url": url, "token": (row.get("token") or "") if token is None else token}
+        if admin or (admin is None and row.get("admin_password")):
+            saved["admin_password"] = (row.get("admin_password") or "") if admin is None else admin
+        self._write({**self._saved, key: saved})
 
     def reset(self, key: str) -> None:
         self._load()
@@ -215,6 +230,7 @@ class Slot:
     probe: Callable[[str, str], Awaitable[str]]
     example: str = ""
     local: bool = True
+    admin: str = ""  # label of the model service's admin password; set = it is required with the address
 
 
 async def _unused(url: str, token: str) -> str:
@@ -261,7 +277,7 @@ def register(mcp: Any, *, service: str, admin_password: str, usage: Usage, backe
         return None
 
     def describe() -> list[dict[str, Any]]:
-        return [{"key": s.key, "label": s.label, "help": s.help, "example": s.example, "local": s.local,
+        return [{"key": s.key, "label": s.label, "help": s.help, "example": s.example, "local": s.local, "admin": s.admin,
                  **backends.describe(s.key)} for s in slots]
 
     def listing() -> dict[str, Any]:
@@ -274,18 +290,18 @@ def register(mcp: Any, *, service: str, admin_password: str, usage: Usage, backe
             return {}
         return data if isinstance(data, dict) else {}
 
-    def cleaned(slot: Slot, data: dict[str, Any]) -> tuple[str, str | None]:
-        url, token = data.get("url", ""), data.get("token")
-        if not isinstance(url, str) or not (token is None or isinstance(token, str)):
+    def cleaned(slot: Slot, data: dict[str, Any]) -> tuple[str, str | None, str | None]:
+        url, token, admin = data.get("url", ""), data.get("token"), data.get("admin_password")
+        if not isinstance(url, str) or not all(v is None or isinstance(v, str) for v in (token, admin)):
             raise ValueError("Send {\"url\": text, \"token\": text}.")
         url = url.strip().rstrip("/")
         if not url and not slot.local:
             raise ValueError(f"{slot.label} needs the address of its model service.")
         if url and not _valid_url(url):
             raise ValueError("The address must look like http://host:port, with no user name, query or fragment.")
-        if token is not None and len(token) > MAX_TOKEN:
-            raise ValueError("That token is too long.")
-        return url, token
+        if any(v is not None and len(v) > MAX_TOKEN for v in (token, admin)):
+            raise ValueError("That token or password is too long.")
+        return url, token, admin
 
     @mcp.custom_route("/admin/status", methods=["GET"])
     async def admin_status(request: Request) -> Response:
@@ -338,16 +354,20 @@ def register(mcp: Any, *, service: str, admin_password: str, usage: Usage, backe
                 if "connection" in data:
                     if not isinstance(data["connection"], str) or backends.connection(data["connection"]) is None:
                         raise ValueError("No such saved connection.")
+                    if slot.admin and not backends.connection_admin(data["connection"]):
+                        raise ValueError(f"That connection has no {slot.admin}. Edit it and add one.")
                 elif "url" not in data:
                     raise ValueError("Send {\"url\": text, \"token\": text} or {\"connection\": name}.")
                 else:
-                    url, token = cleaned(slot, data)
+                    url, token, admin = cleaned(slot, data)
+                    if slot.admin and url and not (admin or backends.admin_password(slot.key)):
+                        raise ValueError(f"{slot.label} needs its {slot.admin} with the address.")
             except ValueError as error:
                 return JSONResponse({"detail": str(error)}, status_code=422)
             if "connection" in data:
                 await asyncio.to_thread(backends.use, slot.key, data["connection"])
             else:
-                await asyncio.to_thread(backends.set, slot.key, url, token)
+                await asyncio.to_thread(backends.set, slot.key, url, token, admin)
         return JSONResponse(listing())
 
     @mcp.custom_route("/admin/connections/{name}", methods=["PUT", "DELETE"])
@@ -365,12 +385,12 @@ def register(mcp: Any, *, service: str, admin_password: str, usage: Usage, backe
             if not NAME.fullmatch(name):
                 raise ValueError("The name takes 1 to 40 letters, digits, spaces, dots, dashes or underscores.")
             data = await body_of(request)
-            url, token = cleaned(Slot("", "A connection", "", _unused, local=False), data)
+            url, token, admin = cleaned(Slot("", "A connection", "", _unused, local=False), data)
             if backends.connection(name) is None and len(backends.connections()) >= MAX_CONNECTIONS:
                 raise ValueError("Too many saved connections.")
         except ValueError as error:
             return JSONResponse({"detail": str(error)}, status_code=422)
-        await asyncio.to_thread(backends.save_connection, name, url, token)
+        await asyncio.to_thread(backends.save_connection, name, url, token, admin)
         return JSONResponse(listing())
 
     @mcp.custom_route("/admin/backends/{key}/test", methods=["POST"])
@@ -388,7 +408,7 @@ def register(mcp: Any, *, service: str, admin_password: str, usage: Usage, backe
                     raise ValueError("No such saved connection.")
                 url, token = backends.connection(picked)  # type: ignore[misc]
             else:
-                url, token = cleaned(slot, data) if "url" in data else ((backends.get(slot.key) or ("", ""))[0], None)
+                url, token, _ = cleaned(slot, data) if "url" in data else ((backends.get(slot.key) or ("", ""))[0], None, None)
         except ValueError as error:
             return JSONResponse({"detail": str(error)}, status_code=422)
         if not url:
