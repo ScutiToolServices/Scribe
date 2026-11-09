@@ -30,12 +30,11 @@ A plain publish (`run.bat`, Deploy, option 1) only updates the `live` branch, so
 
 ## Admin page
 
-With `SERVICE_ADMIN_PASSWORD` set, `/admin/` (header `X-Admin-Password`) has four parts:
+With `SERVICE_ADMIN_PASSWORD` set, open `/admin/` and sign in. The shared sidebar has **Overview**, **Playground**, **Access tokens**, **Model connections**, **Runtime & settings**, **Usage** and **Connect & API**. Each page has a direct URL hash. The sidebar collapses to an icon rail and remembers its display preference in this browser.
 
-- **Status**: what the service runs and for how long, plus the model and where it runs.
-- **Usage**: calls, errors and average time per user since the service started (kept in memory, so a restart clears it).
-- **Model services**: speech to text runs at a `STT_Whisper_Model` address (Scribe has no local model) (address and token are saved on the admin page only). Keep `SERVICE_MODEL` equal to the model the service runs: it keys the transcript cache. Pick a saved connection or **Another address**, set the address and token, press **Test connection** (it calls the other service with that token), then **Save**. A change applies to the next call; the token is stored in `.data/backends.json`, never shown again, and `Use the environment value` drops the saved one (back to not connected).
-- **Settings**: the options saved in `.data/settings.json`.
+The Speech to text slot calls STT_Whisper_Model. Keep the runtime model option equal to the remote model because it keys the transcript cache. Overview reports the model and where transcription runs.
+
+Overview reads `/health` and the service status. Usage shows calls, errors and average time per requester, and resets on restart. Model connections keeps slot test/save/reset and reusable named connections. Runtime & settings saves options and marks those needing a restart. Access tokens creates and revokes caller tokens; Connect & API lists addresses and endpoints with Copy buttons. Admin authentication remains separate from public request tokens. See [the web UI guide](docs/guide-web-ui.md).
 
 ## Tests
 
@@ -46,7 +45,7 @@ uv run pytest -q
 
 ## Try it from the admin page
 
-Open `/admin/` and use **Try it** with a token from the **Tokens** card and a requester username. The token is held only in memory, separate from admin sign-in. Requests use the ordinary public API, quotas and cache; the panel shows HTTP status, latency, output, cancellation and curl with a token placeholder. See [the web UI guide](docs/guide-web-ui.md).
+Open `/admin/#playground` and use **Playground** with a token from **Access tokens** and a requester username. The token is held only in memory, separate from admin sign-in. Requests use the ordinary public API, quotas and cache; the panel shows HTTP status, latency, output, cancellation and curl with a token placeholder. See [the web UI guide](docs/guide-web-ui.md).
 
 Enter the requester username and upload encoded audio. The panel posts its bytes to `POST /api/transcribe` with `X-Requester-Username` and `X-Filename`, then displays the JSON transcript. Scribe keeps its existing ffmpeg decoding, duration/byte caps, per-user quota, cached transcription and retention behavior. This upload playground does not start a live dictation WebSocket.
 

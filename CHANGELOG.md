@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Admin navigation
+
+The admin page now has seven sidebar pages: Overview, Playground, Access tokens, Model connections, Runtime & settings, Usage and Connect & API. Overview reads live health and service status; links and browser history select pages. The sidebar collapses to an icon rail and remembers its display preference. Existing connections, tokens, settings and public Playground authentication keep their behavior.
+
 ### Breaking: callers use admin-page tokens, not `INTERNAL_API_TOKEN`
 
 `INTERNAL_API_TOKEN` is no longer read. Set `SERVICE_ADMIN_PASSWORD`, open `/admin/`, make one token per caller on the new **Tokens** card (stored hashed in `tokens.json` in the data folder; sent in `X-Internal-Token`) and put it in the caller's configuration (Armory: the extension's `headers`). A token can carry a calls-per-minute limit and an expiry, and **Revoke** cuts a caller off at once. Without an admin password there are no checks, and the service refuses to start on a non-loopback host.

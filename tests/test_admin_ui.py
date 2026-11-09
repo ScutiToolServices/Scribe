@@ -50,6 +50,7 @@ def page(base_url):
             page.goto(base_url)
             page.fill("#password", PASSWORD)
             page.click("#signin-button")
+            page.click('[data-page="playground"]')
             sync_api.expect(page.locator("#pg-token")).to_be_visible()
             yield page
         finally:

@@ -3,173 +3,303 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>Service admin</title>
 <link rel="icon" href="icon.png" type="image/png">
 <style>
-/* Same tokens as the model-service admin page. This file is identical in all five tool services; the service name comes from the API. */
+/* Shared tool-service shell. Service data and capabilities come from authenticated metadata. */
 :root {
-  --bg: light-dark(#ffffff, #17171a);
-  --surface: light-dark(#f6f6f7, #1f1f23);
-  --text: light-dark(#1c1c1f, #e8e8ea);
-  --muted: light-dark(#6b6b73, #9a9aa3);
-  --border: light-dark(#e3e3e6, #2f2f35);
-  --accent: light-dark(#b23d06, #ff7a33);
-  --accent-contrast: light-dark(#ffffff, #17171a);
-  --ok: light-dark(#1b7a3d, #5fd38a);
-  --error: light-dark(#d03b3b, #ff8282);
+  --bg: light-dark(#ffffff, #19191c);
+  --surface: light-dark(#f5f5f4, #202023);
+  --text: light-dark(#222225, #eeeeef);
+  --muted: light-dark(#67676e, #b0b0b8);
+  --border: light-dark(#e5e5e7, #39393e);
+  --accent: light-dark(#ad3e0b, #ff935a);
+  --accent-contrast: light-dark(#ffffff, #19191c);
+  --selected: light-dark(#fff1e8, #3b2b23);
+  --ok: light-dark(#17734f, #79d9b0);
+  --ok-bg: light-dark(#edf8f2, #20392f);
+  --warning: light-dark(#865900, #f1cb76);
+  --warning-bg: light-dark(#fff7e4, #3b3320);
+  --error: light-dark(#b02d37, #ffa1ab);
   --radius: 8px;
   color-scheme: light dark;
-  font: 15px/1.55 system-ui, "Segoe UI", Roboto, sans-serif;
+  font: 14px/1.5 system-ui, "Segoe UI", sans-serif;
   color: var(--text);
   background: var(--bg);
+  accent-color: var(--accent);
+  scrollbar-color: var(--border) var(--bg);
 }
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
-body { margin: 0; }
-main { max-width: 760px; margin: 0 auto; padding: 32px 16px 56px; }
-h1 { font-size: 1.35em; margin: 0 0 6px; }
-h2 { font-size: 1.05em; margin: 0 0 4px; }
-.muted { color: var(--muted); font-size: .9em; margin: 0 0 16px; }
-.card { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 20px; margin-bottom: 16px; }
-label { display: block; font-weight: 500; font-size: .9em; margin-bottom: 4px; }
-input, select { width: 100%; font: inherit; color: inherit; border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 12px; background: var(--bg); }
-input[type="checkbox"] { width: auto; }
-button { font: inherit; min-height: 40px; border: 1px solid var(--border); border-radius: 9999px; padding: 7px 16px; background: transparent; color: inherit; font-weight: 600; cursor: pointer; }
+body { margin: 0; isolation: isolate; }
+::selection { background: var(--selected); color: var(--text); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+h1, h2, h3, p, dl, dd { margin: 0; }
+h1 { font-size: 1.3rem; font-weight: 600; letter-spacing: -.015em; line-height: 1.3; }
+h2 { font-size: 1.15rem; font-weight: 600; letter-spacing: -.015em; }
+h3 { font-size: 1rem; font-weight: 600; }
+a { color: var(--accent); text-underline-offset: 3px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; background: var(--bg); cursor: pointer; }
+button:hover { background: var(--surface); }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
-button.small { min-height: 32px; padding: 3px 10px; font-size: .8em; }
+button.primary:hover { filter: brightness(.95); }
+button.small { padding: 6px 10px; min-height: 32px; font-size: .9rem; }
 button:disabled { opacity: .55; cursor: default; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.setting { padding: 12px 0; border-bottom: 1px solid var(--border); }
-.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-small { display: block; margin-top: 4px; color: var(--muted); }
-.row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
-.row input { flex: 1; }
-.head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-.error { color: var(--error); min-height: 1.5em; margin: 10px 0 0; overflow-wrap: anywhere; }
-.note { color: var(--accent); min-height: 1.5em; margin: 6px 0 0; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 12px; }
-.tile { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); padding: 10px 12px; }
-.tile b { display: block; font-size: 1.15em; overflow-wrap: anywhere; }
-.tile span { color: var(--muted); font-size: .82em; }
-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: .92em; }
-th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
-th { color: var(--muted); font-weight: 500; font-size: .85em; }
-td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-.slot { padding: 14px 0; border-bottom: 1px solid var(--border); }
-.slot:last-child { border-bottom: 0; }
-.field { margin-top: 10px; }
-.result { min-height: 1.4em; margin: 8px 0 0; font-size: .92em; overflow-wrap: anywhere; }
-.result.ok { color: var(--ok); }
-.result.bad { color: var(--error); }
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.connect { display: grid; gap: 8px; margin-top: 12px; }
-.connect-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; }
-.connect-row p { margin: 0; }
-.connect-row code { font-size: .92em; overflow-wrap: anywhere; }
-.connect-group { margin: 14px 0 0; font-weight: 600; }
+input, select, textarea { width: 100%; min-width: 0; border: 1px solid var(--border); border-radius: 6px; padding: 9px 12px; background: var(--bg); caret-color: var(--accent); }
+input[type=checkbox] { width: auto; }
+label { display: block; font-weight: 500; margin-bottom: 6px; }
+small { display: block; margin-top: 6px; color: var(--muted); }
+.muted { color: var(--muted); }
+.page-description { color: var(--muted); max-width: 70ch; margin-bottom: 24px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.icon { width: 18px; height: 18px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.signin { width: min(430px, 100%); margin: 10vh auto 0; padding: 28px 24px; }
+.signin img { width: 42px; height: 42px; margin-bottom: 18px; }
+.signin h1 { font-size: 1.65rem; margin-bottom: 8px; }
+.signin .muted { margin-bottom: 24px; }
+.app-shell { display: grid; grid-template-columns: 224px minmax(0, 1fr); min-height: 100svh; }
+.sidebar { display: flex; flex-direction: column; gap: 26px; position: sticky; top: 0; height: 100svh; padding: 26px 16px 18px; background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
+.brand img { width: 32px; height: 32px; flex-shrink: 0; }
+.brand strong, .identity strong { display: block; font-weight: 600; }
+.brand small { margin: 2px 0 0; font-size: .8rem; }
+.identity { padding: 0 8px; overflow-wrap: anywhere; }
+.identity strong { font-size: 1.15rem; }
+.identity small { margin-top: 3px; font-size: .85rem; }
+.navigation { display: grid; gap: 4px; }
+.nav-item { width: 100%; justify-content: flex-start; gap: 10px; padding: 10px; border: 0; background: transparent; color: var(--muted); text-align: left; }
+.nav-item:hover { background: var(--border); color: var(--text); }
+.nav-item[aria-current=page] { background: var(--selected); color: var(--accent); font-weight: 600; }
+.sidebar-footer { margin-top: auto; display: grid; gap: 12px; padding: 0 8px; }
+.sidebar-footer small { font-size: .8rem; }
+.workspace { min-width: 0; }
+.main-header { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 28px; min-height: 70px; background: var(--bg); border-bottom: 1px solid var(--border); }
+.main-header h1 { margin-right: auto; }
+.main-header button { font-size: .85rem; }
+.health-status { display: inline-flex; align-items: center; gap: 7px; font-size: .85rem; color: var(--muted); }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.health-status[data-state=ready] { color: var(--ok); }
+.health-status[data-state=not-ready] { color: var(--warning); }
+.health-status[data-state=unavailable] { color: var(--error); }
+.content { max-width: 1200px; padding: 30px 28px 48px; }
+.page-panel { min-width: 0; }
+.section-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.section { margin-top: 26px; padding-top: 24px; border-top: 1px solid var(--border); }
+.section > .muted { margin: 6px 0 16px; }
+.health-banner { display: flex; align-items: flex-start; gap: 14px; padding: 20px; border-radius: 10px; background: var(--surface); margin-bottom: 26px; }
+.health-banner > .icon { margin-top: 3px; }
+.health-banner[data-state=ready] { background: var(--ok-bg); }
+.health-banner[data-state=ready] > .icon { color: var(--ok); }
+.health-banner[data-state=not-ready] { background: var(--warning-bg); }
+.health-banner[data-state=not-ready] > .icon { color: var(--warning); }
+.health-banner p { color: var(--muted); margin-top: 5px; max-width: 70ch; }
+.health-banner button { margin-left: auto; }
+.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; margin-bottom: 30px; }
+.summary-item { border-right: 1px solid var(--border); padding-right: 16px; }
+.summary-item:last-child { border: 0; }
+.summary-item dt, .summary-item small { color: var(--muted); font-size: .85rem; }
+.summary-item dd { font-size: 1.85rem; font-weight: 600; line-height: 1.3; letter-spacing: -.02em; margin: 7px 0 3px; font-variant-numeric: tabular-nums; }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 32px; }
+.tile { display: flex; flex-direction: column-reverse; min-width: 0; gap: 4px; overflow-wrap: anywhere; }
+.tile span { color: var(--muted); font-size: .85rem; }
+.tile b { font-weight: 500; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; }
+.field { margin-top: 16px; min-width: 0; }
+.form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 16px; }
+.form-grid .field { margin-top: 0; }
+.top { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.setting, .slot { padding: 20px 0; border-bottom: 1px solid var(--border); }
+.setting:first-child, .slot:first-child { padding-top: 0; }
+.setting input { margin-top: 6px; }
+.slot h3 { overflow-wrap: anywhere; }
+.slot .field { max-width: 760px; }
+.table-wrap { overflow-x: auto; max-width: 100%; }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; margin-top: 14px; }
+th, td { padding: 12px 8px; border-bottom: 1px solid var(--border); text-align: left; overflow-wrap: anywhere; }
+th { color: var(--muted); font-size: .85rem; font-weight: 500; }
+th:first-child, td:first-child { padding-left: 0; }
+th:last-child, td:last-child { padding-right: 0; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.result, .note { min-height: 1.5em; margin-top: 10px; overflow-wrap: anywhere; }
+.result.ok, .note { color: var(--ok); }
+.result.bad, .error { color: var(--error); }
+.error { overflow-wrap: anywhere; }
+#error:not(:empty) { margin: 16px 0; padding: 14px 0; }
+#notice { min-height: 1.5em; color: var(--ok); margin-top: 18px; }
+#fresh { padding: 18px; margin: 22px 0; background: var(--selected); border: 0; border-radius: 8px; }
+#fresh-token { display: block; overflow-wrap: anywhere; margin-top: 12px; }
+#conn-form { max-width: 760px; margin-top: 18px; }
+.connect { display: grid; }
+.connect-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 18px 0; border-bottom: 1px solid var(--border); }
+.connect-row > div { min-width: 0; }
+.connect-row code { font-size: .9rem; overflow-wrap: anywhere; }
+.connect-row .muted { margin-top: 5px; font-size: .85rem; }
+.connect-group { font-weight: 600; margin-top: 24px; }
+#pg-title { display: none; }
+.sidebar-collapsed { grid-template-columns: 64px minmax(0, 1fr); }
+.sidebar-collapsed .sidebar { padding: 24px 9px 18px; }
+.sidebar-collapsed .brand { padding: 0; justify-content: center; }
+.sidebar-collapsed .brand-copy, .sidebar-collapsed .identity, .sidebar-collapsed .sidebar-footer small { display: none; }
+.sidebar-collapsed .nav-item { justify-content: center; padding: 10px; min-height: 44px; }
+.sidebar-collapsed .nav-label, .sidebar-collapsed .signout-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.sidebar-collapsed .sidebar-footer { padding: 0; }
+.sidebar-collapsed #signout { padding: 10px; min-height: 44px; }
+@media (prefers-reduced-motion: no-preference) { .app-shell { transition: grid-template-columns 180ms cubic-bezier(.16, 1, .3, 1); } }
+@media (max-width: 850px) { .app-shell { grid-template-columns: 190px minmax(0, 1fr); } .sidebar-collapsed { grid-template-columns: 64px minmax(0, 1fr); } .content { padding: 24px 20px; } .main-header { padding: 14px 20px; } .form-grid { grid-template-columns: 1fr; } }
+@media (max-width: 600px) {
+  .app-shell { grid-template-columns: 112px minmax(0, 1fr); }
+  .sidebar { padding: 20px 8px 16px; gap: 20px; }
+  .brand { padding: 0 4px; }
+  .brand-copy { display: none; }
+  .identity { padding: 0 4px; }
+  .identity strong { font-size: 1rem; }
+  .identity small { font-size: .8rem; }
+  .nav-item { padding: 10px 7px; min-height: 44px; overflow-wrap: anywhere; }
+  .nav-item .icon { display: none; }
+  .sidebar-footer { padding: 0 4px; }
+  .sidebar-footer small { display: none; }
+  .main-header { padding: 14px 12px; gap: 10px; }
+  .main-header h1 { font-size: 1.15rem; }
+  .content { padding: 22px 12px; overflow-wrap: anywhere; }
+  .summary, .tiles { grid-template-columns: 1fr; gap: 16px; }
+  .summary-item { border: 0; border-bottom: 1px solid var(--border); padding: 0 0 12px; }
+  .health-banner { flex-wrap: wrap; padding: 14px; }
+  .health-banner button { margin-left: 0; }
+  .connect-row { flex-wrap: wrap; }
+  button { min-height: 44px; max-width: 100%; }
+  .sidebar-collapsed { grid-template-columns: 64px minmax(0, 1fr); }
+  .sidebar-collapsed .nav-item .icon { display: block; }
+  table { min-width: 480px; }
+  #backend-table { min-width: 350px; }
+}
+/* Polish layer (same as the model-service admin pages): depth, type detail, one entrance motion, themed surfaces. */
+:root {
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 6%), 0 8px 24px -8px rgb(0 0 0 / 14%);
+  --ring: color-mix(in srgb, var(--accent) 28%, transparent);
+  scrollbar-width: thin;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+h1, h2, h3 { text-wrap: balance; }
+.page-description, .muted, .health-banner p { text-wrap: pretty; }
+button { transition: background-color .15s var(--ease-out), border-color .15s var(--ease-out), color .15s var(--ease-out), transform .1s var(--ease-out); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:disabled { cursor: not-allowed; }
+input, select, textarea { transition: border-color .15s var(--ease-out), box-shadow .15s var(--ease-out); }
+input:hover:not(:disabled), textarea:hover, select:hover { border-color: color-mix(in srgb, var(--muted) 55%, var(--border)); }
+input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
+.signin { border: 1px solid transparent; border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-raised); }
+.nav-item { transition: background-color .15s var(--ease-out), color .15s var(--ease-out); }
+tbody tr { transition: background-color .12s var(--ease-out); }
+tbody tr:hover { background: color-mix(in srgb, var(--muted) 6%, transparent); }
+code { padding: 1px 5px; border-radius: 4px; background: var(--surface); }
+pre { padding: 14px 16px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); }
+.sidebar, .content { scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent; }
+/* The one authored moment: a page rises into place when the route changes. */
+.page-panel:not([hidden]) { animation: view-in .28s var(--ease-out) both; }
+@keyframes view-in { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+}
 </style>
 </head>
 <body>
-<main>
-  <div class="head">
-    <div>
-      <h1 id="title">Service admin</h1>
-      <p class="muted">Status, which model services this service uses, and its settings.</p>
-    </div>
-    <button type="button" id="signout" hidden>Sign out</button>
+<svg class="sr-only" aria-hidden="true" focusable="false"><defs>
+  <symbol id="i-overview" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+  <symbol id="i-playground" viewBox="0 0 24 24"><path d="M9 3h6M10 3v7l-6 9a1 1 0 0 0 1 2h14a1 1 0 0 0 1-2l-6-9V3M7 15h10"/></symbol>
+  <symbol id="i-tokens" viewBox="0 0 24 24"><circle cx="8" cy="15" r="5"/><path d="m12 11 8-8m-3 3 3 3m-6 0 3 3"/></symbol>
+  <symbol id="i-backends" viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="5" rx="1"/><rect x="2" y="16" width="8" height="5" rx="1"/><rect x="14" y="16" width="8" height="5" rx="1"/><path d="M12 8v4H6v4m6-4h6v4"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h9m4 0h3M4 17h3m4 0h9M13 4v6M7 14v6"/></symbol>
+  <symbol id="i-usage" viewBox="0 0 24 24"><path d="M4 20h16M6 16v-4m6 4V5m6 11V9"/></symbol>
+  <symbol id="i-connect" viewBox="0 0 24 24"><path d="m8 8 8 8m-9-5-3 3a4 4 0 0 0 6 6l3-3M11 7l3-3a4 4 0 0 1 6 6l-3 3"/></symbol>
+  <symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18m7-13-4 4 4 4"/></symbol>
+  <symbol id="i-signout" viewBox="0 0 24 24"><path d="M9 4H4v16h5m4-12 4 4-4 4m-4-4h11"/></symbol>
+  <symbol id="i-health" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></symbol>
+</defs></svg>
+<section id="signin" class="signin" aria-labelledby="signin-title">
+  <img src="service-icon.png" alt="">
+  <h1 id="signin-title">Tool service admin</h1>
+  <p class="muted">Manage service access, model connections and runtime settings.</p>
+  <form id="login">
+    <label for="password">Admin password</label>
+    <input id="password" type="password" autocomplete="current-password" required aria-describedby="error">
+    <div class="row"><button class="primary" id="signin-button">Sign in</button></div>
+  </form>
+</section>
+<div id="panel" class="app-shell" hidden>
+  <aside id="sidebar" class="sidebar" aria-label="Service sidebar">
+    <div class="brand"><img src="icon.png" alt=""><div class="brand-copy"><strong>Tool services</strong><small>Service administration</small></div></div>
+    <div class="identity"><strong id="title">Service admin</strong><small>MCP &amp; HTTP</small></div>
+    <nav class="navigation" aria-label="Admin pages">
+      <button type="button" class="nav-item" data-page="overview" aria-label="Overview" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg><span class="nav-label">Overview</span></button>
+      <button type="button" class="nav-item" data-page="playground" aria-label="Playground"><svg class="icon" aria-hidden="true"><use href="#i-playground"/></svg><span class="nav-label">Playground</span></button>
+      <button type="button" class="nav-item" data-page="tokens" aria-label="Access tokens"><svg class="icon" aria-hidden="true"><use href="#i-tokens"/></svg><span class="nav-label">Access tokens</span></button>
+      <button type="button" class="nav-item" data-page="backends" aria-label="Model connections"><svg class="icon" aria-hidden="true"><use href="#i-backends"/></svg><span class="nav-label">Model connections</span></button>
+      <button type="button" class="nav-item" data-page="settings" aria-label="Runtime &amp; settings"><svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg><span class="nav-label">Runtime &amp; settings</span></button>
+      <button type="button" class="nav-item" data-page="usage" aria-label="Usage"><svg class="icon" aria-hidden="true"><use href="#i-usage"/></svg><span class="nav-label">Usage</span></button>
+      <button type="button" class="nav-item" data-page="connect" aria-label="Connect &amp; API"><svg class="icon" aria-hidden="true"><use href="#i-connect"/></svg><span class="nav-label">Connect &amp; API</span></button>
+    </nav>
+    <div class="sidebar-footer"><small>Private admin session</small><button type="button" id="signout" aria-label="Sign out"><svg class="icon" aria-hidden="true"><use href="#i-signout"/></svg><span class="signout-label">Sign out</span></button></div>
+  </aside>
+  <div class="workspace">
+    <header class="main-header"><button type="button" id="sidebar-toggle" aria-controls="sidebar" aria-expanded="true" aria-label="Collapse sidebar"><svg class="icon" aria-hidden="true"><use href="#i-sidebar"/></svg><span id="sidebar-toggle-label">Collapse</span></button><h1 id="page-title">Overview</h1><span id="health-state" class="health-status" data-state="checking" role="status"><span class="status-dot"></span><span id="health-text">Checking</span></span><button type="button" id="theme">Theme: System</button></header>
+    <main id="main-content" class="content" aria-labelledby="page-title">
+      <section class="page-panel" data-panel="overview">
+        <div class="section-heading"><p class="muted">Service readiness, model connections and usage.</p><button type="button" data-go="playground">Open playground</button></div>
+        <section id="readiness" class="health-banner" data-state="checking" aria-labelledby="readiness-title"><svg class="icon" aria-hidden="true"><use href="#i-health"/></svg><div><h2 id="readiness-title">Checking service readiness</h2><p id="readiness-description">Waiting for the service health response.</p></div><button type="button" id="refresh-status">Refresh status</button></section>
+        <dl class="summary"><div class="summary-item"><dt>Model slots configured</dt><dd id="overview-slot-count">—</dd><small>Remote models only</small></div><div class="summary-item"><dt>Active caller tokens</dt><dd id="overview-token-count">—</dd><small>One token per caller</small></div><div class="summary-item"><dt>Calls since restart</dt><dd id="overview-call-count">—</dd><small>Per-user counters</small></div></dl>
+        <section aria-labelledby="status-title"><h2 id="status-title">Service details</h2><div id="tiles" class="tiles" style="margin-top:18px"></div></section>
+        <section class="section" aria-labelledby="backend-summary-title"><div class="section-heading"><h2 id="backend-summary-title">Model connections</h2><button type="button" class="small" data-go="backends">Manage connections</button></div><div class="table-wrap"><table id="backend-table"><thead><tr><th>Model slot</th><th>Connection</th><th>Configuration</th></tr></thead><tbody id="backend-summary"></tbody></table></div><p class="muted" id="backend-note" style="margin-top:14px"></p></section>
+      </section>
+      <section class="page-panel" data-panel="playground" hidden><p class="page-description">Test public tool workflows with a caller token and requester identity. Admin authentication is separate.</p><section id="playground" aria-label="Public request playground"></section><p id="playground-empty" class="muted" hidden>No public request form is available for this service.</p></section>
+      <section class="page-panel" data-panel="tokens" hidden>
+        <p class="page-description">One token per caller. Tokens protect MCP and HTTP API access; they never grant admin access.</p>
+        <form id="token-form"><div class="form-grid"><div class="field"><label for="token-name">Caller name</label><input id="token-name" type="text" maxlength="64" autocomplete="off" required></div><div class="field"><label for="token-rate">Calls per minute (optional)</label><input id="token-rate" type="number" min="1" max="100000"></div><div class="field"><label for="token-days">Expires in days (optional)</label><input id="token-days" type="number" min="1" max="3650"></div></div><div class="row"><button class="primary" id="token-create">Create token</button></div></form>
+        <div id="fresh" hidden><div class="top"><strong>Your new token</strong><button type="button" id="fresh-copy" class="small">Copy</button></div><code id="fresh-token"></code><small>Copy it now. It cannot be shown again.</small></div><p id="token-status" class="sr-only" role="status"></p>
+        <div class="table-wrap"><table id="token-table" hidden><thead><tr><th>Caller</th><th>Created</th><th>Last used</th><th class="num">Limit/min</th><th>Expires</th><th></th></tr></thead><tbody></tbody></table></div><p id="token-empty" class="muted" style="margin-top:24px">No tokens yet. Create one for your first caller.</p>
+      </section>
+      <section class="page-panel" data-panel="backends" hidden>
+        <p class="page-description">Save model addresses, then assign a saved connection or another address to each slot. Credentials stay on the service host and are never returned.</p>
+        <section aria-labelledby="backends-title"><h2 id="backends-title">Model slots</h2><div id="slots" style="margin-top:18px"></div></section>
+        <section class="section" aria-labelledby="conn-title"><h2 id="conn-title">Saved connections</h2><p class="muted">Save named addresses once. Editing a connection updates every slot using it; a connection in use cannot be deleted.</p><div id="conns"></div>
+          <form id="conn-form" class="slot"><h3 id="conn-form-title">Add connection</h3><div class="field"><label for="conn-name">Name</label><input id="conn-name" type="text" maxlength="40" autocomplete="off" spellcheck="false" required></div><div class="field"><label for="conn-url">Model service address</label><input id="conn-url" type="url" autocomplete="off" spellcheck="false" required></div><div class="field"><label for="conn-token">Model API token</label><input id="conn-token" type="password" autocomplete="new-password"><small id="conn-token-help">Saved credentials are never displayed.</small></div><div class="field" id="conn-admin-field" hidden><label for="conn-admin">Model admin password</label><input id="conn-admin" type="password" autocomplete="new-password"><small id="conn-admin-help">Used for reference voice upload and deletion.</small></div><div class="row"><button class="primary" id="conn-save">Save connection</button><button type="button" id="conn-cancel">Clear form</button></div></form>
+        </section>
+      </section>
+      <section class="page-panel" data-panel="settings" hidden><p class="page-description">Saved values override startup defaults. Reset restores the starting value. Settings marked restart apply after the service restarts.</p><form id="form"><div id="list"></div><div class="row"><button class="primary" id="save">Save changes</button></div></form><p id="note" class="note" role="status"></p></section>
+      <section class="page-panel" data-panel="usage" hidden><p class="page-description" id="usage-note">Calls and failures grouped by requester. Counters reset when the service restarts.</p><div class="table-wrap"><table id="usage" hidden><thead><tr><th>User</th><th class="num">Calls</th><th class="num">Errors</th><th class="num">Average (ms)</th><th>Last call</th></tr></thead><tbody></tbody></table></div><section class="section"><h2>Requester identity</h2><p class="muted">HTTP uses <code>X-Requester-Username</code>; MCP uses <code>_meta.requester.username</code>. This identity owns stored uploads and results.</p></section></section>
+      <section class="page-panel" data-panel="connect" hidden><p class="page-description">Choose the address matching where your caller runs. Public requests use <code>X-Internal-Token</code>; HTTP also uses <code>X-Requester-Username</code>.</p><div id="connect-list" class="connect"></div><p id="connect-status" class="sr-only" role="status"></p></section>
+      <p id="notice" role="status"></p>
+    </main>
   </div>
-  <section id="signin" class="card">
-    <form id="login">
-      <label for="password">Admin password</label>
-      <input id="password" type="password" autocomplete="current-password" required>
-      <div class="row"><button class="primary" id="signin-button">Sign in</button></div>
-    </form>
-  </section>
-  <div id="panel" hidden>
-    <section id="playground" class="card"></section>
-    <section class="card" aria-labelledby="connect-title">
-      <h2 id="connect-title">Connect to this service</h2>
-      <p class="muted">Addresses other services can use. Pick the row that matches where the caller runs. Every call except <code>/health</code> needs a token from the Tokens card below in <code>X-Internal-Token</code>; HTTP routes also need the requester name in <code>X-Requester-Username</code>.</p>
-      <div id="connect-list" class="connect"></div>
-      <p id="connect-status" class="sr-only" role="status"></p>
-    </section>
-    <section class="card" aria-labelledby="tokens-title">
-      <h2 id="tokens-title">Tokens</h2>
-      <p class="muted">One token per caller (Armory, another service), sent in <code>X-Internal-Token</code>. A token is shown once, when you create it. Revoke it to cut that caller off. With no token, every call to <code>/mcp</code> and <code>/api</code> is refused.</p>
-      <form id="token-form" class="row">
-        <input id="token-name" type="text" maxlength="64" placeholder="Caller name" aria-label="Caller name" autocomplete="off" required>
-        <input id="token-rate" type="number" min="1" max="100000" placeholder="Calls per minute (optional)" aria-label="Calls per minute" style="flex:0 0 12em">
-        <input id="token-days" type="number" min="1" max="3650" placeholder="Expires in days (optional)" aria-label="Expires in days" style="flex:0 0 12em">
-        <button class="primary" id="token-create">Create token</button>
-      </form>
-      <div id="fresh" class="slot" hidden>
-        <div class="top"><strong>Your new token</strong><button type="button" id="fresh-copy" class="small">Copy</button></div>
-        <code id="fresh-token" style="overflow-wrap:anywhere"></code>
-        <small>Copy it now. It cannot be shown again.</small>
-      </div>
-      <p id="token-status" class="sr-only" role="status"></p>
-      <table id="token-table" hidden>
-        <thead><tr><th>Caller</th><th>Created</th><th>Last used</th><th class="num">Limit/min</th><th>Expires</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-      <p id="token-empty" class="muted">No tokens yet.</p>
-    </section>
-    <section class="card" aria-labelledby="status-title">
-      <h2 id="status-title">Status</h2>
-      <div id="tiles" class="tiles"></div>
-    </section>
-    <section class="card" aria-labelledby="usage-title">
-      <h2 id="usage-title">Usage</h2>
-      <p class="muted" id="usage-note">Since the service started.</p>
-      <table id="usage" hidden>
-        <thead><tr><th>User</th><th class="num">Calls</th><th class="num">Errors</th><th class="num">Average (ms)</th><th>Last call</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </section>
-    <section class="card" aria-labelledby="conn-title">
-      <h2 id="conn-title">Saved connections</h2>
-      <p class="muted">Named model-service addresses. Save them once, then pick one for each model service below. The token is stored on this host and never shown again.</p>
-      <div id="conns"></div>
-      <form id="conn-form" class="slot">
-        <div class="field"><label for="conn-name">Name</label><input id="conn-name" type="text" maxlength="40" autocomplete="off" spellcheck="false" required></div>
-        <div class="field"><label for="conn-url">Address</label><input id="conn-url" type="url" autocomplete="off" spellcheck="false" required></div>
-        <div class="field"><label for="conn-token">Token</label><input id="conn-token" type="password" autocomplete="new-password"></div>
-        <div class="field" id="conn-admin-field" hidden><label for="conn-admin">Model admin password</label><input id="conn-admin" type="password" autocomplete="new-password"></div>
-        <div class="row"><button class="primary small" id="conn-save">Save connection</button></div>
-      </form>
-    </section>
-    <section class="card" aria-labelledby="backends-title">
-      <h2 id="backends-title">Model services</h2>
-      <p class="muted">Where this service sends its model work. A change applies to the next call. The token is stored on this host and never shown again.</p>
-      <div id="slots"></div>
-    </section>
-    <section class="card" aria-labelledby="settings-title">
-      <h2 id="settings-title">Settings</h2>
-      <p class="muted">A value saved here beats the environment variable. Reset goes back to it. Options marked restart apply after the service restarts.</p>
-      <form id="form">
-        <div id="list"></div>
-        <div class="row"><button class="primary" id="save">Save changes</button></div>
-      </form>
-      <p id="note" class="note" role="status"></p>
-    </section>
-  </div>
-  <p id="error" class="error" role="alert"></p>
-</main>
+</div>
+<p id="error" class="error" role="alert"></p>
+
 <script src="playground.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 let password = "", rows = [], noteTimer, refreshTimer, playground;
+let session = new AbortController(), sessionVersion = 0, refreshing = false;
+let latestStatus = null, latestBackends = [], tokenCount = 0, healthVersion = 0;
 try { password = sessionStorage.getItem("admin") || ""; } catch {}
 
 async function call(path, method = "GET", body) {
+  const version = sessionVersion, signal = session.signal;
   let response;
   try {
     response = await fetch(path, {
       method, headers: {"X-Admin-Password": password, "Content-Type": "application/json"},
-      body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(15000)
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(15000)])
     });
-  } catch { throw new Error("Could not reach the service."); }
+  } catch {
+    if (signal.aborted || version !== sessionVersion) throw new DOMException("Session ended", "AbortError");
+    throw new Error("Could not reach the service. Check its address and try again.");
+  }
   const data = await response.json().catch(() => ({}));
+  if (signal.aborted || version !== sessionVersion) throw new DOMException("Session ended", "AbortError");
   if (!response.ok) {
     const error = new Error(data.detail || "Request failed (" + response.status + ").");
     error.status = response.status;
@@ -183,17 +313,127 @@ function el(tag, props = {}, ...children) {
   return node;
 }
 function fail(error) {
+  if (error.name === "AbortError") return;
   if (error.status === 401) {
-    playground?.reset(); forgetToken();
-    password = ""; clearInterval(refreshTimer);
-    try { sessionStorage.removeItem("admin"); } catch {}
-    $("panel").hidden = true; $("signout").hidden = true; $("signin").hidden = false;
+    closeSession();
   }
+  if ($("panel").hidden) $("login").append($("error"));
+  else $("main-content").prepend($("error"));
   $("error").textContent = error.message;
 }
 function name(service) {
-  $("title").textContent = service + " admin";
-  document.title = service + " admin";
+  $("title").textContent = service;
+  navigation.service = service;
+  navigation.updateTitle();
+}
+
+/** Route pages and collapse the rail without recreating forms or their draft values. */
+class AdminNavigation {
+  constructor() {
+    this.service = "Tool service";
+    this.buttons = [...document.querySelectorAll("[data-page]")];
+    this.panels = [...document.querySelectorAll("[data-panel]")];
+    this.collapsed = false;
+    try { this.collapsed = localStorage.getItem("tool-admin-sidebar") === "collapsed"; } catch {}
+    this.setCollapsed(this.collapsed);
+    for (const button of this.buttons) button.onclick = () => this.select(button.dataset.page, true);
+    for (const button of document.querySelectorAll("[data-go]")) button.onclick = () => this.select(button.dataset.go, true);
+    $("sidebar-toggle").onclick = () => {
+      this.setCollapsed(!this.collapsed);
+      try { localStorage.setItem("tool-admin-sidebar", this.collapsed ? "collapsed" : "expanded"); } catch {}
+    };
+    window.addEventListener("hashchange", () => this.select(location.hash.slice(1)));
+    this.select(location.hash.slice(1));
+  }
+  setCollapsed(value) {
+    this.collapsed = value;
+    $("panel").classList.toggle("sidebar-collapsed", value);
+    $("sidebar-toggle").setAttribute("aria-expanded", String(!value));
+    $("sidebar-toggle").setAttribute("aria-label", value ? "Expand sidebar" : "Collapse sidebar");
+    $("sidebar-toggle-label").textContent = value ? "Expand" : "Collapse";
+    for (const button of this.buttons) {
+      if (value) button.title = button.getAttribute("aria-label");
+      else button.removeAttribute("title");
+    }
+  }
+  select(requested, focus = false) {
+    this.page = this.buttons.some(button => button.dataset.page === requested) ? requested : "overview";
+    for (const button of this.buttons) {
+      if (button.dataset.page === this.page) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+    }
+    for (const panel of this.panels) panel.hidden = panel.dataset.panel !== this.page;
+    this.updateTitle();
+    if (location.hash !== "#" + this.page) {
+      if (focus) history.pushState(null, "", "#" + this.page);
+      else history.replaceState(null, "", "#" + this.page);
+    }
+    if (focus) {
+      const title = $("page-title");
+      title.tabIndex = -1;
+      title.focus({preventScroll: true});
+      window.scrollTo({top: 0});
+    }
+  }
+  updateTitle() {
+    const label = this.buttons.find(button => button.dataset.page === this.page).getAttribute("aria-label");
+    $("page-title").textContent = label;
+    document.title = label + " · " + this.service + " admin";
+  }
+}
+const navigation = new AdminNavigation();
+
+/** Persist only visual preferences; credentials stay in their existing session scope. */
+function applyTheme(value) {
+  const theme = ["system", "light", "dark"].includes(value) ? value : "system";
+  document.documentElement.style.colorScheme = theme === "system" ? "light dark" : theme;
+  $("theme").textContent = "Theme: " + theme[0].toUpperCase() + theme.slice(1);
+  $("theme").dataset.theme = theme;
+}
+let initialTheme = "system";
+try { initialTheme = localStorage.getItem("tool-admin-theme") || "system"; } catch {}
+applyTheme(initialTheme);
+$("theme").onclick = () => {
+  const modes = ["system", "light", "dark"];
+  const next = modes[(modes.indexOf($("theme").dataset.theme) + 1) % modes.length];
+  applyTheme(next);
+  try { localStorage.setItem("tool-admin-theme", next); } catch {}
+};
+
+function showHealth(data, unavailable = false) {
+  const ready = data?.ok !== false && data?.ready === true;
+  const state = unavailable ? "unavailable" : ready ? "ready" : "not-ready";
+  $("health-state").dataset.state = $("readiness").dataset.state = state;
+  $("health-text").textContent = unavailable ? "Unavailable" : ready ? "Ready" : "Not ready";
+  $("readiness-title").textContent = unavailable ? "Readiness check unavailable" : ready ? "Ready to process requests" : "Service is not ready";
+  $("readiness-description").textContent = unavailable
+    ? "Could not check service health. Refresh status to try again."
+    : ready
+      ? "The service reports ready. Connection tests can verify each model backend separately."
+      : "Review model connections and service details. Missing connections or an unavailable model can prevent processing.";
+}
+async function refreshHealth() {
+  const version = sessionVersion, signal = session.signal, check = ++healthVersion;
+  try {
+    const response = await fetch("../health", {signal: AbortSignal.any([signal, AbortSignal.timeout(15000)])});
+    if (!response.ok) throw new Error("Health unavailable");
+    const data = await response.json();
+    if (typeof data?.ready !== "boolean") throw new Error("Invalid health response");
+    if (version === sessionVersion && check === healthVersion && !signal.aborted) showHealth(data);
+  } catch {
+    if (version === sessionVersion && check === healthVersion && !signal.aborted) showHealth(null, true);
+  }
+}
+
+function showOverview() {
+  $("overview-call-count").textContent = latestStatus ? Number(latestStatus.usage.calls).toLocaleString() : "—";
+  $("overview-token-count").textContent = String(tokenCount);
+  const configured = latestBackends.filter(slot => slot.url || slot.connection).length;
+  $("overview-slot-count").textContent = configured + " / " + latestBackends.length;
+  $("backend-summary").replaceChildren(...latestBackends.map(slot => el("tr", {},
+    el("td", {textContent: slot.label}), el("td", {textContent: slot.connection || slot.url || "Not connected"}),
+    el("td", {textContent: slot.url || slot.connection ? "Configured" : "Not configured"}))));
+  $("backend-note").textContent = "Configured slots report saved addresses, not verified backend availability. Readiness follows the service’s health check.";
 }
 
 /* Status and usage */
@@ -243,8 +483,10 @@ function renderConnect(c) {
   $("connect-list").replaceChildren(...rows);
 }
 function showStatus(data) {
+  latestStatus = data;
   renderConnect(data.connect);
   if (!playground && data.playground) playground = Playground.mount($("playground"), data.playground, {secrets: () => [password]});
+  $("playground-empty").hidden = Boolean(data.playground);
   name(data.service);
   const u = data.usage;
   const tiles = [...data.items, {label: "Running for", value: duration(u.uptime_s)}, {label: "Calls", value: String(u.calls)},
@@ -260,12 +502,15 @@ function showStatus(data) {
   }));
   $("usage").hidden = !u.users.length;
   $("usage-note").textContent = u.users.length ? "Since the service started (counts restart with it)." : "No calls since the service started.";
+  showOverview();
 }
 
 /* Tokens */
 const day = epoch => new Date(epoch * 1000).toLocaleDateString();
 function forgetToken() { $("fresh-token").textContent = ""; $("fresh").hidden = true; }
 function showTokens(list) {
+  tokenCount = list.filter(row => !row.expires || row.expires > Date.now() / 1000).length;
+  showOverview();
   $("token-table").hidden = !list.length; $("token-empty").hidden = list.length > 0;
   $("token-table").tBodies[0].replaceChildren(...list.map(row => {
     const revoke = el("button", {type: "button", className: "small", textContent: "Revoke"});
@@ -286,6 +531,7 @@ function showTokens(list) {
 async function refreshTokens() { showTokens((await call("tokens")).tokens); }
 $("token-form").onsubmit = async event => {
   event.preventDefault(); $("error").textContent = ""; forgetToken();
+  $("token-create").disabled = true;
   const body = {name: $("token-name").value.trim()};
   if ($("token-rate").value) body.rate = Number($("token-rate").value);
   if ($("token-days").value) body.expires_days = Number($("token-days").value);
@@ -294,6 +540,7 @@ $("token-form").onsubmit = async event => {
     $("fresh-token").textContent = made.token; $("fresh").hidden = false;
     $("token-form").reset(); await refreshTokens();
   } catch (error) { fail(error); }
+  finally { $("token-create").disabled = false; }
 };
 $("fresh-copy").onclick = async () => {
   const text = $("fresh-token").textContent;
@@ -313,11 +560,9 @@ function slotCard(slot) {
   for (const c of connections) mode.append(el("option", {value: "c:" + c.name, textContent: c.name}));
   mode.append(el("option", {value: "remote", textContent: "Another address"}));
   mode.value = slot.connection ? "c:" + slot.connection : slot.mode === "local" && !slot.local ? "remote" : slot.mode;
-  const url = el("input", {id: id + "-url", type: "url", value: slot.url, placeholder: slot.example, autocomplete: "off", spellcheck: false});
-  const token = el("input", {id: id + "-token", type: "password", autocomplete: "new-password",
-    placeholder: slot.token_set ? "Saved. Type a new one to replace it." : "No token saved"});
-  const admin = el("input", {id: id + "-admin", type: "password", autocomplete: "new-password",
-    placeholder: slot.admin_set ? "Saved. Type a new one to replace it." : "Required"});
+  const url = el("input", {id: id + "-url", type: "url", value: slot.url, autocomplete: "off", spellcheck: false});
+  const token = el("input", {id: id + "-token", type: "password", autocomplete: "new-password"});
+  const admin = el("input", {id: id + "-admin", type: "password", autocomplete: "new-password"});
   const result = el("p", {className: "result", role: "status"});
   const picked = () => mode.value.startsWith("c:") ? mode.value.slice(2) : "";
   const sync = () => {
@@ -339,7 +584,7 @@ function slotCard(slot) {
     if (token.value && !picked()) body.token = token.value;
     if (admin.value && !picked()) body.admin_password = admin.value;
     show(await call("backends/" + slot.key, "PUT", body));
-    flash("Saved " + slot.label);
+    flash("Saved " + slot.label); refreshHealth();
   });
   const test = el("button", {type: "button", className: "small", textContent: "Test connection"});
   test.onclick = () => run(test, async () => {
@@ -352,37 +597,53 @@ function slotCard(slot) {
   const actions = el("div", {className: "row"}, save, test);
   if (slot.token_set && slot.mode === "remote" && !slot.connection) {
     const clear = el("button", {type: "button", className: "small", textContent: "Clear token"});
-    clear.onclick = () => run(clear, async () => { show(await call("backends/" + slot.key, "PUT", {url: url.value.trim(), token: ""})); flash("Token cleared"); });
+    clear.onclick = () => run(clear, async () => { show(await call("backends/" + slot.key, "PUT", {url: url.value.trim(), token: ""})); flash("Token cleared"); refreshHealth(); });
     actions.append(clear);
   }
   if (slot.source === "saved") {
-    const reset = el("button", {type: "button", className: "small", textContent: "Use the environment value"});
-    reset.onclick = () => run(reset, async () => { show(await call("backends/" + slot.key, "DELETE")); flash("Back to the environment value"); });
+    const reset = el("button", {type: "button", className: "small", textContent: slot.local ? "Reset connection" : "Disconnect slot"});
+    reset.onclick = () => run(reset, async () => {
+      if (!confirm("Disconnect " + slot.label + "? Requests using this slot may fail until it is connected again.")) return;
+      show(await call("backends/" + slot.key, "DELETE")); flash("Reset " + slot.label); refreshHealth();
+    });
     actions.append(reset);
   }
   return el("div", {className: "slot"},
     el("h3", {textContent: slot.label, style: "margin:0;font-size:1em"}),
-    el("small", {textContent: slot.help + " · From " + slot.source}),
-    el("div", {className: "field"}, el("label", {htmlFor: mode.id, textContent: "Runs"}), mode),
-    el("div", {className: "field"}, el("label", {htmlFor: url.id, textContent: "Address"}), url),
-    el("div", {className: "field"}, el("label", {htmlFor: token.id, textContent: "Token"}), token),
-    ...(slot.admin ? [el("div", {className: "field"}, el("label", {htmlFor: admin.id, textContent: slot.admin}), admin)] : []),
+    el("small", {textContent: slot.help}),
+    el("div", {className: "field"}, el("label", {htmlFor: mode.id, textContent: "Saved connection or direct address"}), mode),
+    el("div", {className: "field"}, el("label", {htmlFor: url.id, textContent: "Model service address"}), url, el("small", {textContent: "Example: " + slot.example})),
+    el("div", {className: "field"}, el("label", {htmlFor: token.id, textContent: "Model API token"}), token,
+      el("small", {textContent: slot.token_set ? "Token saved. Leave blank to keep it, or enter a replacement." : "No token saved."})),
+    ...(slot.admin ? [el("div", {className: "field"}, el("label", {htmlFor: admin.id, textContent: slot.admin}), admin,
+      el("small", {textContent: slot.admin_set ? "Password saved. Leave blank to keep it, or enter a replacement." : "Required for reference upload and deletion."}))] : []),
     actions, result);
 }
 function show(data) {
   name(data.service);
   connections = data.connections || [];
+  latestBackends = data.backends;
+  showOverview();
   $("slots").replaceChildren(...data.backends.map(slotCard));
   $("conn-admin-field").hidden = !data.backends.some(s => s.admin);
   $("conns").replaceChildren(...connections.map(c => {
     const edit = el("button", {type: "button", className: "small", textContent: "Edit"});
     edit.setAttribute("aria-label", "Edit " + c.name);
-    edit.onclick = () => { $("conn-name").value = c.name; $("conn-url").value = c.url; $("conn-token").value = ""; $("conn-token").placeholder = c.token_set ? "Saved. Type a new one to replace it." : "No token saved"; $("conn-admin").value = ""; $("conn-admin").placeholder = c.admin_set ? "Saved. Type a new one to replace it." : "No password saved"; };
+    edit.onclick = () => {
+      $("conn-form-title").textContent = "Edit connection";
+      $("conn-name").value = c.name; $("conn-url").value = c.url; $("conn-token").value = ""; $("conn-admin").value = "";
+      $("conn-token-help").textContent = c.token_set ? "Token saved. Leave blank to keep it, or enter a replacement." : "No token saved.";
+      $("conn-admin-help").textContent = c.admin_set ? "Password saved. Leave blank to keep it, or enter a replacement." : "Used for reference voice upload and deletion.";
+      $("conn-name").focus();
+    };
     const del = el("button", {type: "button", className: "small", textContent: "Delete"});
     del.setAttribute("aria-label", "Delete " + c.name);
     del.onclick = async () => {
+      if (!confirm("Delete saved connection " + c.name + "?")) return;
       $("error").textContent = "";
+      del.disabled = true;
       try { show(await call("connections/" + encodeURIComponent(c.name), "DELETE")); flash("Deleted " + c.name); } catch (error) { fail(error); }
+      finally { del.disabled = false; }
     };
     return el("div", {className: "slot"}, el("h3", {textContent: c.name, style: "margin:0;font-size:1em"}),
       el("small", {textContent: c.url + (c.token_set ? " · token saved" : " · no token") + (c.admin_set ? " · admin password saved" : "") + (c.used_by.length ? " · used by " + c.used_by.join(", ") : "")}),
@@ -391,15 +652,24 @@ function show(data) {
 }
 $("conn-form").onsubmit = async event => {
   event.preventDefault(); $("error").textContent = "";
+  $("conn-save").disabled = true;
   const body = {url: $("conn-url").value.trim()};
   if ($("conn-token").value) body.token = $("conn-token").value;
   if ($("conn-admin").value) body.admin_password = $("conn-admin").value;
   try {
     const name = $("conn-name").value.trim();
     show(await call("connections/" + encodeURIComponent(name), "PUT", body));
-    $("conn-form").reset(); flash("Saved " + name);
+    clearConnectionForm(); flash("Saved " + name); refreshHealth();
   } catch (error) { fail(error); }
+  finally { $("conn-save").disabled = false; }
 };
+function clearConnectionForm() {
+  $("conn-form").reset();
+  $("conn-form-title").textContent = "Add connection";
+  $("conn-token-help").textContent = "Saved credentials are never displayed.";
+  $("conn-admin-help").textContent = "Used for reference voice upload and deletion.";
+}
+$("conn-cancel").onclick = clearConnectionForm;
 
 /* Settings */
 function showSettings(data) {
@@ -434,9 +704,9 @@ function value(row) {
   return input.value === "" ? null : Number(input.value);
 }
 function flash(text) {
-  $("note").textContent = text;
+  $("notice").textContent = text;
   clearTimeout(noteTimer);
-  noteTimer = setTimeout(() => { $("note").textContent = ""; }, 3000);
+  noteTimer = setTimeout(() => { $("notice").textContent = ""; }, 5000);
 }
 async function saveSettings(values) {
   $("error").textContent = ""; $("note").textContent = "";
@@ -448,19 +718,31 @@ async function saveSettings(values) {
 
 /* Sign in and refresh */
 async function refreshStatus() {
-  try { showStatus(await call("status")); } catch (error) { fail(error); }
+  if (refreshing || !password || $("panel").hidden) return;
+  refreshing = true;
+  $("refresh-status").disabled = true;
+  try { await Promise.all([call("status").then(showStatus), refreshHealth()]); }
+  catch (error) { fail(error); }
+  finally { refreshing = false; $("refresh-status").disabled = false; }
 }
 async function open(candidate) {
+  session.abort(); session = new AbortController();
+  const version = ++sessionVersion;
   password = candidate; $("error").textContent = "";
+  $("signin-button").disabled = true;
   try {
     const [status, backends, settings, tokens] = await Promise.all([call("status"), call("backends"), call("settings"), call("tokens")]);
+    if (version !== sessionVersion) return;
     showStatus(status); show(backends); showSettings(settings); showTokens(tokens.tokens);
     $("signin").hidden = true; $("panel").hidden = false; $("signout").hidden = false;
+    $("main-content").prepend($("error"));
     try { sessionStorage.setItem("admin", password); } catch {}
     $("password").value = "";
+    refreshHealth();
     clearInterval(refreshTimer);
     refreshTimer = setInterval(() => { if (!document.hidden) refreshStatus(); }, 10000);
   } catch (error) { fail(error); }
+  finally { if (version === sessionVersion) $("signin-button").disabled = false; }
 }
 $("login").onsubmit = event => { event.preventDefault(); open($("password").value); };
 $("form").onsubmit = event => {
@@ -472,13 +754,26 @@ $("form").onsubmit = event => {
   }
   if (Object.keys(values).length) saveSettings(values); else flash("Nothing changed");
 };
-$("signout").onclick = () => {
+function closeSession() {
+  session.abort(); session = new AbortController(); sessionVersion++;
   playground?.reset(); forgetToken();
-  password = ""; clearInterval(refreshTimer);
+  password = ""; clearInterval(refreshTimer); clearTimeout(noteTimer);
   try { sessionStorage.removeItem("admin"); } catch {}
   $("panel").hidden = true; $("signout").hidden = true; $("signin").hidden = false;
   $("list").replaceChildren(); $("slots").replaceChildren(); $("conns").replaceChildren(); $("tiles").replaceChildren(); $("token-table").tBodies[0].replaceChildren();
-};
+  $("usage").tBodies[0].replaceChildren(); $("backend-summary").replaceChildren();
+  $("token-form").reset(); clearConnectionForm();
+  for (const field of document.querySelectorAll('input[type="password"]')) field.value = "";
+  $("notice").textContent = $("note").textContent = "";
+  $("signin-button").disabled = false;
+  $("login").append($("error"));
+  latestStatus = null; latestBackends = []; tokenCount = 0; connections = []; rows = [];
+  $("password").focus();
+}
+$("signout").onclick = () => { closeSession(); $("error").textContent = ""; };
+$("refresh-status").onclick = refreshStatus;
+window.addEventListener("pagehide", () => { session.abort(); playground?.reset(); clearInterval(refreshTimer); });
+window.addEventListener("pageshow", event => { if (event.persisted && password) open(password); });
 if (password) open(password);
 </script>
 </body>

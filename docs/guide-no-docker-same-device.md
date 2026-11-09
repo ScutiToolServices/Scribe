@@ -35,3 +35,11 @@ Ctrl+C in the terminal. Do not run this and the Docker stack together: both use 
 ```bash
 uv run pytest -q
 ```
+
+The dependency-free admin browser check needs Node.js 22 or newer and an installed Chromium browser. Set `CHROMIUM_PATH` to its executable if it is not found in the Playwright cache. Run from this service's folder:
+
+```bash
+node tests/admin_shell_browser.cjs
+```
+
+It uses synthetic HTTP fixtures; a running service or model is not required.
