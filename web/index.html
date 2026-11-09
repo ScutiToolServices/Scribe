@@ -204,6 +204,36 @@ pre { padding: 14px 16px; border-radius: var(--radius); background: var(--surfac
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
 }
+/* Model connections page: slots read as status first, editing opens in place. */
+.table-wrap { position: relative; }
+.slots { margin-top: 18px; }
+.slot-card { padding: 20px 0; border-bottom: 1px solid var(--border); }
+.slot-card:first-child { padding-top: 0; }
+.slot-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.slot-head > div:first-child { min-width: 0; }
+.slot-head > button { flex-shrink: 0; white-space: nowrap; }
+.slot-head small { margin-top: 2px; }
+.slot-state { display: inline-flex; align-items: center; gap: 7px; margin-top: 6px; font-size: .85rem; color: var(--muted); }
+.slot-state[data-state=ok] { color: var(--ok); }
+.slot-state[data-state=none] { color: var(--warning); }
+.slot-state[data-state=bad] { color: var(--error); }
+.slot-meta { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 10px; font-size: .9rem; color: var(--muted); }
+.slot-meta code { color: var(--text); overflow-wrap: anywhere; }
+.slot-meta:empty, .slot-card .result:empty { display: none; }
+.slot-edit { max-width: 760px; margin-top: 16px; padding: 18px 20px 20px; background: var(--surface); border-radius: var(--radius); }
+.source { border: 0; padding: 0; margin: 0; min-width: 0; }
+.source legend { padding: 0; margin-bottom: 8px; font-weight: 500; }
+.source .row { margin-top: 0; gap: 8px; }
+.source label { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; margin: 0; padding: 8px 14px; font-weight: 400; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: border-color .15s var(--ease-out), background-color .15s var(--ease-out); }
+.source label:hover { border-color: color-mix(in srgb, var(--muted) 55%, var(--border)); }
+.source label:has(input:checked) { border-color: var(--accent); background: var(--selected); }
+.source label:has(input:focus-visible) { box-shadow: 0 0 0 3px var(--ring); }
+.slot-edit input:disabled { background: transparent; color: var(--muted); }
+.source input { width: auto; accent-color: var(--accent); margin: 0; }
+.conn-form { max-width: 760px; margin: 0 0 22px; padding: 18px 20px 20px; background: var(--surface); border-radius: var(--radius); }
+.form-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 14px; }
+@media (max-width: 850px) { .form-grid.two { grid-template-columns: 1fr; } }
+#conn-table td .row { margin: 0; justify-content: flex-end; flex-wrap: nowrap; }
 </style>
 </head>
 <body>
@@ -262,10 +292,14 @@ pre { padding: 14px 16px; border-radius: var(--radius); background: var(--surfac
         <div class="table-wrap"><table id="token-table" hidden><thead><tr><th>Caller</th><th>Created</th><th>Last used</th><th class="num">Limit/min</th><th>Expires</th><th></th></tr></thead><tbody></tbody></table></div><p id="token-empty" class="muted" style="margin-top:24px">No tokens yet. Create one for your first caller.</p>
       </section>
       <section class="page-panel" data-panel="backends" hidden>
-        <p class="page-description">Save model addresses, then assign a saved connection or another address to each slot. Credentials stay on the service host and are never returned.</p>
-        <section aria-labelledby="backends-title"><h2 id="backends-title">Model slots</h2><div id="slots" style="margin-top:18px"></div></section>
-        <section class="section" aria-labelledby="conn-title"><h2 id="conn-title">Saved connections</h2><p class="muted">Save named addresses once. Editing a connection updates every slot using it; a connection in use cannot be deleted.</p><div id="conns"></div>
-          <form id="conn-form" class="slot"><h3 id="conn-form-title">Add connection</h3><div class="field"><label for="conn-name">Name</label><input id="conn-name" type="text" maxlength="40" autocomplete="off" spellcheck="false" required></div><div class="field"><label for="conn-url">Model service address</label><input id="conn-url" type="url" autocomplete="off" spellcheck="false" required></div><div class="field"><label for="conn-token">Model API token</label><input id="conn-token" type="password" autocomplete="new-password"><small id="conn-token-help">Saved credentials are never displayed.</small></div><div class="field" id="conn-admin-field" hidden><label for="conn-admin">Model admin password</label><input id="conn-admin" type="password" autocomplete="new-password"><small id="conn-admin-help">Used for reference voice upload and deletion.</small></div><div class="row"><button class="primary" id="conn-save">Save connection</button><button type="button" id="conn-cancel">Clear form</button></div></form>
+        <p class="page-description">Each slot is where this service sends its model work. Point a slot at a saved connection or a one-off address. Credentials stay on the service host and are never returned.</p>
+        <section aria-labelledby="backends-title"><h2 id="backends-title">Model slots</h2><div id="slots" class="slots"></div></section>
+        <section class="section" aria-labelledby="conn-title">
+          <div class="section-heading"><h2 id="conn-title">Saved connections</h2><button type="button" class="small" id="conn-add" aria-controls="conn-form" aria-expanded="false">Add connection</button></div>
+          <p class="muted">Save a model address once and reuse it. Editing a connection updates every slot using it; one in use cannot be deleted.</p>
+          <form id="conn-form" class="conn-form" hidden><h3 id="conn-form-title">Add connection</h3><div class="form-grid two"><div class="field"><label for="conn-name">Name</label><input id="conn-name" type="text" maxlength="40" autocomplete="off" spellcheck="false" required></div><div class="field"><label for="conn-url">Model service address</label><input id="conn-url" type="url" autocomplete="off" spellcheck="false" required></div><div class="field"><label for="conn-token">Model API token</label><input id="conn-token" type="password" autocomplete="new-password"><small id="conn-token-help">Saved credentials are never displayed.</small></div><div class="field" id="conn-admin-field" hidden><label for="conn-admin">Model admin password</label><input id="conn-admin" type="password" autocomplete="new-password"><small id="conn-admin-help">Used for reference voice upload and deletion.</small></div></div><div class="row"><button class="primary" id="conn-save">Save connection</button><button type="button" id="conn-cancel">Cancel</button></div></form>
+          <p id="conns-empty" class="muted" hidden>No saved connections yet.</p>
+          <div class="table-wrap"><table id="conn-table" hidden><thead><tr><th>Name</th><th>Address</th><th>Credentials</th><th>Used by</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="conns"></tbody></table></div>
         </section>
       </section>
       <section class="page-panel" data-panel="settings" hidden><p class="page-description">Saved values override startup defaults. Reset restores the starting value. Settings marked restart apply after the service restarts.</p><form id="form"><div id="list"></div><div class="row"><button class="primary" id="save">Save changes</button></div></form><p id="note" class="note" role="status"></p></section>
@@ -553,46 +587,93 @@ $("fresh-copy").onclick = async () => {
 
 /* Model services */
 let connections = [];
+function slotSummary(slot) {
+  if (slot.connection) return {state: "ok", text: "Saved connection: " + slot.connection};
+  if (slot.url) return {state: "ok", text: "Direct address"};
+  if (slot.local && slot.mode === "local") return {state: "ok", text: "Runs in this service"};
+  return {state: "none", text: "Not connected"};
+}
 function slotCard(slot) {
-  const id = "slot-" + slot.key;
-  const mode = el("select", {id: id + "-mode"});
-  if (slot.local) mode.append(el("option", {value: "local", textContent: "In this service"}));
-  for (const c of connections) mode.append(el("option", {value: "c:" + c.name, textContent: c.name}));
-  mode.append(el("option", {value: "remote", textContent: "Another address"}));
-  mode.value = slot.connection ? "c:" + slot.connection : slot.mode === "local" && !slot.local ? "remote" : slot.mode;
+  const id = "slot-" + slot.key, info = slotSummary(slot), saved = connections.find(c => c.name === slot.connection);
+  const stateText = el("span", {textContent: info.text});
+  const chip = el("span", {className: "slot-state"}, el("span", {className: "status-dot"}), stateText);
+  const setState = (state, text) => { chip.setAttribute("data-state", state); stateText.textContent = text; };
+  setState(info.state, info.text);
+
+  const panel = el("div", {className: "slot-edit", id: id + "-edit", hidden: info.state === "none"});
+  const toggle = el("button", {type: "button", className: "small"});
+  toggle.setAttribute("aria-controls", panel.id);
+  const paint = () => {
+    toggle.textContent = !panel.hidden ? "Close" : info.state === "none" ? "Connect" : "Edit";
+    toggle.setAttribute("aria-expanded", String(!panel.hidden));
+  };
+  toggle.onclick = () => { panel.hidden = !panel.hidden; paint(); };
+  paint();
+
+  const options = [];
+  if (connections.length) options.push(["connection", "Saved connection"]);
+  options.push(["remote", "Direct address"]);
+  if (slot.local) options.push(["local", "In this service"]);
+  let start = slot.connection ? "connection" : slot.mode === "local" && slot.local ? "local" : "remote";
+  if (!options.some(o => o[0] === start)) start = "remote";
+  const radios = options.map(([value, text]) => {
+    const input = el("input", {type: "radio", name: id + "-source", value, checked: value === start});
+    return el("label", {}, input, text);
+  });
+  const source = () => radios.find(l => l.firstChild.checked).firstChild.value;
+
+  const pick = el("select", {id: id + "-conn"});
+  for (const c of connections) pick.append(el("option", {value: c.name, textContent: c.name}));
+  if (slot.connection) pick.value = slot.connection;
   const url = el("input", {id: id + "-url", type: "url", value: slot.url, autocomplete: "off", spellcheck: false});
   const token = el("input", {id: id + "-token", type: "password", autocomplete: "new-password"});
   const admin = el("input", {id: id + "-admin", type: "password", autocomplete: "new-password"});
-  const result = el("p", {className: "result", role: "status"});
-  const picked = () => mode.value.startsWith("c:") ? mode.value.slice(2) : "";
+  let typed = slot.connection ? "" : slot.url;
+  url.oninput = () => { typed = url.value; };
+  const field = (input, text, ...extra) => el("div", {className: "field"}, el("label", {htmlFor: input.id, textContent: text}), input, ...extra);
+  const pickField = field(pick, "Saved connection");
+  const hint = el("small", {textContent: "Example: " + slot.example});
+  const urlField = field(url, "Model service address", hint);
+  const tokenField = field(token, "Model API token", el("small", {textContent: slot.token_set ? "Token saved. Leave blank to keep it, or enter a replacement." : "No token saved."}));
+  const adminField = slot.admin ? field(admin, slot.admin, el("small", {textContent: slot.admin_set ? "Password saved. Leave blank to keep it, or enter a replacement." : "Required for reference upload and deletion."})) : null;
   const sync = () => {
-    url.disabled = token.disabled = admin.disabled = mode.value !== "remote";
-    const c = connections.find(x => x.name === picked());
-    if (c) url.value = c.url;
+    const s = source();
+    pickField.hidden = s !== "connection";
+    urlField.hidden = s === "local";
+    tokenField.hidden = s !== "remote";
+    if (adminField) adminField.hidden = s !== "remote";
+    url.disabled = s !== "remote";
+    hint.hidden = s !== "remote";
+    if (s === "connection") url.value = connections.find(c => c.name === pick.value)?.url || "";
+    else if (s === "remote") url.value = typed;
   };
-  mode.onchange = sync; sync();
+  for (const label of radios) label.firstChild.onchange = sync;
+  pick.onchange = sync; sync();
 
+  const result = el("p", {className: "result", role: "status"});
   const run = async (button, work) => {
     button.disabled = true; result.className = "result"; result.textContent = ""; $("error").textContent = "";
     try { await work(); } catch (error) { fail(error); }
     finally { button.disabled = false; }
   };
-  const values = () => picked() ? {connection: picked()} : {url: mode.value === "local" ? "" : url.value.trim()};
+  const picked = () => source() === "connection" ? pick.value : "";
+  const values = () => picked() ? {connection: picked()} : {url: source() === "local" ? "" : url.value.trim()};
   const save = el("button", {type: "button", className: "primary small", textContent: "Save"});
   save.onclick = () => run(save, async () => {
     const body = values();
-    if (token.value && !picked()) body.token = token.value;
-    if (admin.value && !picked()) body.admin_password = admin.value;
+    if (token.value && source() === "remote") body.token = token.value;
+    if (admin.value && source() === "remote") body.admin_password = admin.value;
     show(await call("backends/" + slot.key, "PUT", body));
     flash("Saved " + slot.label); refreshHealth();
   });
   const test = el("button", {type: "button", className: "small", textContent: "Test connection"});
   test.onclick = () => run(test, async () => {
     const body = values();
-    if (token.value && !picked()) body.token = token.value;
+    if (token.value && source() === "remote") body.token = token.value;
     const reply = await call("backends/" + slot.key + "/test", "POST", body);
     result.className = "result " + (reply.ok ? "ok" : "bad");
     result.textContent = reply.message;
+    setState(reply.ok ? "ok" : "bad", reply.ok ? "Reachable" : "Test failed");
   });
   const actions = el("div", {className: "row"}, save, test);
   if (slot.token_set && slot.mode === "remote" && !slot.connection) {
@@ -608,16 +689,15 @@ function slotCard(slot) {
     });
     actions.append(reset);
   }
-  return el("div", {className: "slot"},
-    el("h3", {textContent: slot.label, style: "margin:0;font-size:1em"}),
-    el("small", {textContent: slot.help}),
-    el("div", {className: "field"}, el("label", {htmlFor: mode.id, textContent: "Saved connection or direct address"}), mode),
-    el("div", {className: "field"}, el("label", {htmlFor: url.id, textContent: "Model service address"}), url, el("small", {textContent: "Example: " + slot.example})),
-    el("div", {className: "field"}, el("label", {htmlFor: token.id, textContent: "Model API token"}), token,
-      el("small", {textContent: slot.token_set ? "Token saved. Leave blank to keep it, or enter a replacement." : "No token saved."})),
-    ...(slot.admin ? [el("div", {className: "field"}, el("label", {htmlFor: admin.id, textContent: slot.admin}), admin,
-      el("small", {textContent: slot.admin_set ? "Password saved. Leave blank to keep it, or enter a replacement." : "Required for reference upload and deletion."}))] : []),
-    actions, result);
+  panel.append(el("fieldset", {className: "source"}, el("legend", {textContent: "Model source"}), el("div", {className: "row"}, ...radios)),
+    pickField, urlField, tokenField, ...(adminField ? [adminField] : []), actions);
+
+  const meta = el("div", {className: "slot-meta"});
+  const address = slot.url || saved?.url;
+  if (address) meta.append(el("code", {textContent: address}), el("span", {textContent: (saved ? saved.token_set : slot.token_set) ? "Token saved" : "No token"}));
+  return el("div", {className: "slot-card"},
+    el("div", {className: "slot-head"}, el("div", {}, el("h3", {textContent: slot.label}), el("small", {textContent: slot.help}), chip), toggle),
+    meta, result, panel);
 }
 function show(data) {
   name(data.service);
@@ -626,28 +706,32 @@ function show(data) {
   showOverview();
   $("slots").replaceChildren(...data.backends.map(slotCard));
   $("conn-admin-field").hidden = !data.backends.some(s => s.admin);
+  $("conn-table").hidden = !connections.length;
+  $("conns-empty").hidden = connections.length > 0;
   $("conns").replaceChildren(...connections.map(c => {
     const edit = el("button", {type: "button", className: "small", textContent: "Edit"});
     edit.setAttribute("aria-label", "Edit " + c.name);
     edit.onclick = () => {
-      $("conn-form-title").textContent = "Edit connection";
+      openConnectionForm("Edit connection");
       $("conn-name").value = c.name; $("conn-url").value = c.url; $("conn-token").value = ""; $("conn-admin").value = "";
       $("conn-token-help").textContent = c.token_set ? "Token saved. Leave blank to keep it, or enter a replacement." : "No token saved.";
       $("conn-admin-help").textContent = c.admin_set ? "Password saved. Leave blank to keep it, or enter a replacement." : "Used for reference voice upload and deletion.";
       $("conn-name").focus();
     };
-    const del = el("button", {type: "button", className: "small", textContent: "Delete"});
+    const del = el("button", {type: "button", className: "small", textContent: "Delete", disabled: c.used_by.length > 0});
     del.setAttribute("aria-label", "Delete " + c.name);
+    if (c.used_by.length) del.title = "In use by " + c.used_by.join(", ");
     del.onclick = async () => {
       if (!confirm("Delete saved connection " + c.name + "?")) return;
       $("error").textContent = "";
       del.disabled = true;
       try { show(await call("connections/" + encodeURIComponent(c.name), "DELETE")); flash("Deleted " + c.name); } catch (error) { fail(error); }
-      finally { del.disabled = false; }
+      finally { del.disabled = c.used_by.length > 0; }
     };
-    return el("div", {className: "slot"}, el("h3", {textContent: c.name, style: "margin:0;font-size:1em"}),
-      el("small", {textContent: c.url + (c.token_set ? " · token saved" : " · no token") + (c.admin_set ? " · admin password saved" : "") + (c.used_by.length ? " · used by " + c.used_by.join(", ") : "")}),
-      el("div", {className: "row"}, edit, del));
+    const credentials = [c.token_set ? "Token" : "", c.admin_set ? "Admin password" : ""].filter(Boolean).join(", ");
+    return el("tr", {}, el("td", {textContent: c.name}), el("td", {}, el("code", {textContent: c.url})),
+      el("td", {textContent: credentials || "None"}), el("td", {textContent: c.used_by.join(", ") || "Not used"}),
+      el("td", {className: "num"}, el("div", {className: "row"}, edit, del)));
   }));
 }
 $("conn-form").onsubmit = async event => {
@@ -663,12 +747,23 @@ $("conn-form").onsubmit = async event => {
   } catch (error) { fail(error); }
   finally { $("conn-save").disabled = false; }
 };
+function openConnectionForm(title) {
+  $("conn-form-title").textContent = title;
+  $("conn-form").hidden = false;
+  $("conn-add").setAttribute("aria-expanded", "true");
+}
 function clearConnectionForm() {
   $("conn-form").reset();
+  $("conn-form").hidden = true;
+  $("conn-add").setAttribute("aria-expanded", "false");
   $("conn-form-title").textContent = "Add connection";
   $("conn-token-help").textContent = "Saved credentials are never displayed.";
   $("conn-admin-help").textContent = "Used for reference voice upload and deletion.";
 }
+$("conn-add").onclick = () => {
+  if (!$("conn-form").hidden) return clearConnectionForm();
+  clearConnectionForm(); openConnectionForm("Add connection"); $("conn-name").focus();
+};
 $("conn-cancel").onclick = clearConnectionForm;
 
 /* Settings */

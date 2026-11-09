@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Model connections page redesign
+
+Each model slot now shows its state first (saved connection, direct address, runs in this service, or not connected) with the address and whether a token is saved. Editing opens in place: pick a source (saved connection, direct address or in this service) and only the fields for that source appear. A slot that has not been connected opens its editor. Test connection also updates the slot's state. Saved connections are a table with credentials and the slots using them; Add connection opens the form only on request, and a connection in use has its Delete button disabled. The admin API is unchanged.
+
 ### Transcript cleanup (optional)
 
 A second model-service slot, `s1mini` (the `STC_S1Mini_Model` service, default `http://127.0.0.1:29280`), is saved on the admin page next to `whisper`. `tool_scribe_transcribe` and `POST /api/transcribe` take opt-in `cleanup` plus `styling` (`casual`, `semi-casual`, `semi-formal`, `formal`), `structure` (`prose`, `lists`) and `context` (`general`, `email`); on the HTTP route they are query options (`?cleanup=true&styling=formal`). The cached transcript stays raw and cleanup is applied per call; segments and timestamps stay as transcribed. With no address saved, or if the service fails, the raw transcript comes back and `message` says cleanup was skipped (`cleaned: false`). It removes filler and fixes punctuation, casing and tone; it cannot use text from the screen, because S1Mini's `context` is only `general` or `email`. Live dictation and `/api/transcribe-partial` are unchanged.
