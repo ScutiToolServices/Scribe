@@ -8,7 +8,7 @@ import re
 import sys
 from pathlib import Path
 
-SIBLINGS = ("Bard", "Scribe", "Reader", "Lens", "Mimic")
+SIBLINGS = ("Bard", "Scribe", "Converse", "Reader", "Lens", "Mimic")
 SHARED = ("src/admin_api.py", "src/tokens.py", "src/middleware.py", "web/index.html", "web/playground.js",
           "tests/test_admin_api.py", "tests/test_tokens.py", "tests/seed.py", "tools/check_sync.py")
 ALLOWED = re.compile(r"^(PREFIX = |const CONFIG = )")  # per-project: token prefix and page config

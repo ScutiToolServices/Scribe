@@ -2,8 +2,6 @@
 
 **Kind:** audio → text
 
-**Group:** Speech-to-Text
-
 **Tags:** `cpu`, `mcp`, `http`, `websocket`, `streaming`, `ffmpeg`
 
 | | |
