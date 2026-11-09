@@ -137,8 +137,16 @@ def test_the_admin_page_shows_status_usage_and_the_whisper_slot(settings):
     assert body["usage"]["calls"] == 2 and body["usage"]["users"][0]["user"] == "ann"
     assert {"label": "Speech model runs", "value": "not connected"} in body["items"]
     slots = c.get("/admin/backends", headers=pw).json()["backends"]
-    assert [(s["key"], s["url"]) for s in slots] == [("whisper", "")]
+    assert [(s["key"], s["url"]) for s in slots] == [("whisper", ""), ("s1mini", "")]
     saved = c.put("/admin/backends/whisper", headers=pw, json={"url": "http://w:29300", "token": "t"}).json()["backends"][0]
     assert saved["mode"] == "remote" and saved["token_set"] is True
     assert {"label": "Speech model runs", "value": "in a model service"} in c.get("/admin/status", headers=pw).json()["items"]
 
+
+
+def test_transcribe_cleanup_is_off_by_default_and_skipped_without_a_connected_service(settings):
+    c = make(settings)
+    assert c.post("/api/transcribe", content=audio(), headers=ANN).json() == {"text": "hello world", "duration_s": 1.0}
+    body = c.post("/api/transcribe?cleanup=true&styling=formal", content=audio(), headers=ANN).json()
+    assert body == {"text": "hello world", "duration_s": 1.0, "cleaned": False}
+    assert c.post("/api/transcribe?cleanup=true&styling=loud", content=audio(), headers=ANN).status_code == 422

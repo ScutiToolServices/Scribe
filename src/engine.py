@@ -119,6 +119,59 @@ async def probe_whisper(url: str, token: str) -> str:
         raise ProbeError("That address is not a STT_Whisper_Model service.") from None
 
 
+STYLINGS = ("casual", "semi-casual", "semi-formal", "formal")  # the STC_S1Mini_Model control values
+STRUCTURES = ("prose", "lists")
+CONTEXTS = ("general", "email")
+
+
+@dataclass(frozen=True)
+class Cleanup:
+    """How to clean a transcript: the STC_S1Mini_Model control line."""
+    styling: str = "semi-formal"
+    structure: str = "prose"
+    context: str = "general"
+
+
+async def remote_normalize(url: str, token: str, text: str, cleanup: Cleanup, timeout_s: float) -> str:
+    """POST the transcript to a STC_S1Mini_Model service; one safe message on any failure."""
+    body = {"text": text, "styling": cleanup.styling, "structure": cleanup.structure, "context": cleanup.context}
+    try:
+        async with httpx.AsyncClient(timeout=timeout_s) as http:
+            reply = await http.post(url + "/v1/normalize", json=body, headers={"X-Internal-Token": token} if token else {})
+        reply.raise_for_status()
+        return str(reply.json()["content"])
+    except Exception as error:
+        raise EngineFailed("Cleanup failed.") from error
+
+
+async def probe_s1mini(url: str, token: str) -> str:
+    """The admin page's Test button for a STC_S1Mini_Model address: reachable, then the token on one short sentence."""
+    await check(url, "", "/health")
+    reply = await check(url, token, "/v1/normalize", method="POST", json={"text": "ok"})
+    try:
+        return f"Connected, token accepted, model {reply.json()['model']}."
+    except (ValueError, KeyError, TypeError):
+        raise ProbeError("That address is not a STC_S1Mini_Model service.") from None
+
+
+class Cleaner:
+    """Transcript cleanup at the STC_S1Mini_Model service in the "s1mini" slot. The slot is read on every call; with no
+    address saved, `connected` is False and the transcript stays as it was."""
+
+    def __init__(self, slot: Callable[[], tuple[str, str] | None], timeout_s: float | Callable[[], float] = 60) -> None:
+        self._slot, self._timeout_s = slot, as_getter(timeout_s)
+
+    @property
+    def connected(self) -> bool:
+        return self._slot() is not None
+
+    async def clean(self, text: str, cleanup: Cleanup) -> str:
+        remote = self._slot()
+        if remote is None or not text.strip():
+            return text
+        return await remote_normalize(remote[0], remote[1], text, cleanup, self._timeout_s())
+
+
 class RoutedEngine:
     """Decoding here, transcription at the STT_Whisper_Model service in the "whisper" slot (saved on the admin page). The slot
     is read on every call, so a change on the admin page applies to the next transcription. With no address saved,

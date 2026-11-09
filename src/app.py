@@ -6,7 +6,7 @@ import asyncio
 import hmac
 import os
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
@@ -22,7 +22,7 @@ from starlette.routing import Mount, WebSocketRoute
 from src.config import PROJECT_DIR, Settings
 from src.contract import TranscribeResult
 from src.admin_api import Backends, Slot, Usage, register
-from src.engine import Decoder, RoutedEngine, SttEngine, probe_whisper
+from src.engine import CONTEXTS, STRUCTURES, STYLINGS, Cleaner, Cleanup, Decoder, RoutedEngine, SttEngine, probe_s1mini, probe_whisper
 from src.errors import AudioRejected, EngineFailed, IdentityRequired, QuotaExceeded, ScribeError
 from src.identity import owner_from_context
 from src.middleware import TokenMiddleware
@@ -103,7 +103,7 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
     )
     store = AudioStore(base.audio_dir, lambda: settings.ttl_seconds, lambda: settings.quota_bytes)
     store.sweep()
-    service = ScribeService(engine, store, settings)
+    service = ScribeService(engine, store, settings, Cleaner(lambda: backends.get("s1mini"), timeout_s=lambda: settings.timeout_s))
     mcp = FastMCP(name="scribe", instructions=INSTRUCTIONS, host=settings.host, port=settings.port)
 
     @mcp.tool(
@@ -113,6 +113,10 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
     async def tool_scribe_transcribe(
         file_id: Annotated[str, Field(description="The file_id from the '[Audio file_id: ...]' line of the user's attachment.")],
         timestamps: Annotated[bool, Field(description="Also return per-segment start and end times.")] = False,
+        cleanup: Annotated[bool, Field(description="Clean the text: drop filler words, fix punctuation and casing. Needs a cleanup service; timestamps stay as transcribed.")] = False,
+        styling: Annotated[Literal[STYLINGS], Field(description="Tone of the cleaned text.")] = "semi-formal",
+        structure: Annotated[Literal[STRUCTURES], Field(description="Cleaned text as prose or as lists.")] = "prose",
+        context: Annotated[Literal[CONTEXTS], Field(description="Where the text goes: 'email' for an email, else 'general'.")] = "general",
         ctx: Context = None,
     ) -> TranscribeResult:
         """Transcribe an attached English audio file to text. The file belongs to the asking user and expires
@@ -120,7 +124,7 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
         try:
             owner = owner_from_context(ctx)
             async with usage.track(owner, "transcribe"):
-                return await service.transcribe(owner, file_id, timestamps)
+                return await service.transcribe(owner, file_id, timestamps, Cleanup(styling, structure, context) if cleanup else None)
         except ScribeError as error:
             raise ToolError(str(error)) from error
 
@@ -140,12 +144,19 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
             return JSONResponse({"error": "too_large"}, status_code=413)
         # Only a display name: last path part, bounded; it never becomes a path.
         filename = request.headers.get("x-filename", "audio").replace("\\", "/").rsplit("/", 1)[-1][:255] or "audio"
+        query = request.query_params
+        cleanup = None
+        if query.get("cleanup") == "true":  # ?cleanup=true&styling=&structure=&context=
+            cleanup = Cleanup(query.get("styling", "semi-formal"), query.get("structure", "prose"), query.get("context", "general"))
+            if cleanup.styling not in STYLINGS or cleanup.structure not in STRUCTURES or cleanup.context not in CONTEXTS:
+                return JSONResponse({"error": "bad_cleanup", "message": "Unknown styling, structure or context."}, status_code=422)
         try:
             stored, expires_at = await service.upload(owner, filename, data)
             if request.url.path == "/api/transcribe":
                 async with usage.track(owner, "transcribe"):
-                    result = await service.transcribe(owner, stored.file_id, False)
-                return JSONResponse({"text": result.text, "duration_s": result.duration_s})
+                    result = await service.transcribe(owner, stored.file_id, False, cleanup)
+                body = {"text": result.text, "duration_s": result.duration_s}
+                return JSONResponse({**body, "cleaned": result.cleaned} if cleanup else body)
         except QuotaExceeded as error:
             return JSONResponse({"error": error.code, "message": str(error)}, status_code=413)
         except AudioRejected as error:
@@ -202,6 +213,8 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
                  playground=PLAYGROUND, slots=[
             Slot("whisper", "Speech to text", "The STT_Whisper_Model service that transcribes. Its model must match Scribe's model option, which keys the transcript cache.",
                  probe_whisper, "http://127.0.0.1:29300", local=False),
+            Slot("s1mini", "Transcript cleanup", "The STC_S1Mini_Model service that cleans a transcript when a call asks for cleanup. Optional: with no address, cleanup is skipped.",
+                 probe_s1mini, "http://127.0.0.1:29280", local=False),
         ])
 
         @mcp.custom_route("/admin/settings", methods=["GET", "PUT"])

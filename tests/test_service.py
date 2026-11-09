@@ -77,3 +77,41 @@ async def test_engine_failure_is_not_cached(settings):
         await service.transcribe("ann", stored.file_id, False)
     engine.fail = False
     assert (await service.transcribe("ann", stored.file_id, False)).cached is False
+
+
+class FakeCleaner:
+    def __init__(self, connected=True, fail=False):
+        self.connected, self.fail, self.seen = connected, fail, []
+
+    async def clean(self, text, cleanup):
+        self.seen.append((text, cleanup))
+        if self.fail:
+            raise EngineFailed("Cleanup failed.")
+        return "Hello, world."
+
+
+async def cleaned(settings, engine, cleaner, cleanup):
+    service = ScribeService(engine, AudioStore(settings.audio_dir, lambda: 86400, lambda: 10**9), settings, cleaner)
+    stored, _ = await service.upload("ann", "a.wav", audio())
+    return await service.transcribe("ann", stored.file_id, False, cleanup)
+
+
+async def test_cleanup_replaces_the_text_but_the_cache_keeps_the_raw_transcript(settings, engine):
+    from src.engine import Cleanup
+    cleaner = FakeCleaner()
+    result = await cleaned(settings, engine, cleaner, Cleanup("formal"))
+    assert (result.text, result.cleaned) == ("Hello, world.", True)
+    assert cleaner.seen == [("hello world", Cleanup("formal"))]
+
+
+async def test_no_cleanup_request_never_calls_the_cleaner(settings, engine):
+    cleaner = FakeCleaner()
+    result = await cleaned(settings, engine, cleaner, None)
+    assert (result.text, result.cleaned, cleaner.seen) == ("hello world", False, [])
+
+
+@pytest.mark.parametrize("cleaner, note", [(FakeCleaner(connected=False), "no cleanup service"), (FakeCleaner(fail=True), "Cleanup failed")])
+async def test_cleanup_that_cannot_run_returns_the_raw_transcript_and_says_so(settings, engine, cleaner, note):
+    from src.engine import Cleanup
+    result = await cleaned(settings, engine, cleaner, Cleanup())
+    assert (result.text, result.cleaned) == ("hello world", False) and note in result.message

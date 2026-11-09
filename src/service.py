@@ -8,14 +8,15 @@ from pathlib import Path
 
 from src.config import Settings
 from src.contract import SegmentOut, TranscribeResult
-from src.engine import PCM_BYTES_PER_SECOND, SttEngine
+from src.engine import PCM_BYTES_PER_SECOND, Cleaner, Cleanup, SttEngine
 from src.errors import AudioRejected, EngineFailed, FileNotFound, IdentityRequired
 from src.store import AudioStore, StoredAudio
 
 
 class ScribeService:
-    def __init__(self, engine: SttEngine, store: AudioStore, settings: Settings) -> None:
+    def __init__(self, engine: SttEngine, store: AudioStore, settings: Settings, cleaner: Cleaner | None = None) -> None:
         self._engine, self._store, self._settings = engine, store, settings
+        self._cleaner = cleaner or Cleaner(lambda: None)
         self._slots = asyncio.Semaphore(settings.concurrency)
         self._locks: dict[tuple[str, str], asyncio.Lock] = {}
         self._inflight: set[asyncio.Task] = set()
@@ -129,7 +130,7 @@ class ScribeService:
         finally:
             await asyncio.to_thread(path.unlink, missing_ok=True)
 
-    async def transcribe(self, owner: str, file_id: str, timestamps: bool) -> TranscribeResult:
+    async def transcribe(self, owner: str, file_id: str, timestamps: bool, cleanup: Cleanup | None = None) -> TranscribeResult:
         if not owner:
             raise IdentityRequired("Scribe needs to know who is asking.")
         key = (owner, file_id)
@@ -147,10 +148,19 @@ class ScribeService:
             if not lock.locked() and not getattr(lock, "_waiters", None):
                 self._locks.pop(key, None)
         segments = [SegmentOut(**s) for s in payload["segments"]] if timestamps else None
+        text, note = payload["text"], ""
+        if cleanup is not None:  # the cache keeps the raw transcript; cleanup is applied per call
+            if not self._cleaner.connected:
+                note = " Cleanup skipped: no cleanup service is connected."
+            else:
+                try:
+                    text = await self._cleaner.clean(text, cleanup)
+                except EngineFailed:
+                    note = " Cleanup failed, so this is the raw transcript."
         return TranscribeResult(
-            text=payload["text"], duration_s=stored.duration_s, language=payload["language"],
-            segments=segments, cached=cached,
-            message=f"Transcribed {stored.duration_s:.0f} s of audio ({len(payload['text'].split())} words).",
+            text=text, duration_s=stored.duration_s, language=payload["language"],
+            segments=segments, cached=cached, cleaned=cleanup is not None and not note,
+            message=f"Transcribed {stored.duration_s:.0f} s of audio ({len(payload['text'].split())} words).{note}",
         )
 
     async def _run(self, owner: str, stored: StoredAudio) -> dict:

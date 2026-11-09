@@ -17,4 +17,5 @@ class TranscribeResult(BaseModel):
     language: str
     segments: list[SegmentOut] | None = None
     cached: bool
+    cleaned: bool = False  # text went through the S1Mini cleanup; segments stay as transcribed
     message: str

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Transcript cleanup (optional)
+
+A second model-service slot, `s1mini` (the `STC_S1Mini_Model` service, default `http://127.0.0.1:29280`), is saved on the admin page next to `whisper`. `tool_scribe_transcribe` and `POST /api/transcribe` take opt-in `cleanup` plus `styling` (`casual`, `semi-casual`, `semi-formal`, `formal`), `structure` (`prose`, `lists`) and `context` (`general`, `email`); on the HTTP route they are query options (`?cleanup=true&styling=formal`). The cached transcript stays raw and cleanup is applied per call; segments and timestamps stay as transcribed. With no address saved, or if the service fails, the raw transcript comes back and `message` says cleanup was skipped (`cleaned: false`). It removes filler and fixes punctuation, casing and tone; it cannot use text from the screen, because S1Mini's `context` is only `general` or `email`. Live dictation and `/api/transcribe-partial` are unchanged.
+
 ### Admin navigation
 
 The admin page now has seven sidebar pages: Overview, Playground, Access tokens, Model connections, Runtime & settings, Usage and Connect & API. Overview reads live health and service status; links and browser history select pages. The sidebar collapses to an icon rail and remembers its display preference. Existing connections, tokens, settings and public Playground authentication keep their behavior.
