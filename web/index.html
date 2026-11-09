@@ -234,6 +234,19 @@ pre { padding: 14px 16px; border-radius: var(--radius); background: var(--surfac
 .form-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 14px; }
 @media (max-width: 850px) { .form-grid.two { grid-template-columns: 1fr; } }
 #conn-table td .row { margin: 0; justify-content: flex-end; flex-wrap: nowrap; }
+.pg-models { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 16px; }
+.pg-models:empty { display: none; }
+.pg-models .slot-state { margin: 0; padding: 6px 12px; background: var(--surface); border-radius: 999px; }
+.pg-models .small { margin-left: auto; }
+.pg-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 16px; }
+.pg-tools button[aria-pressed=true] { border-color: var(--accent); background: var(--selected); }
+.pg-tools small { flex-basis: 100%; color: var(--muted); }
+#pg-batch { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; }
+#pg-batch li { padding: 12px 14px; background: var(--surface); border-radius: var(--radius); display: grid; gap: 8px; }
+#pg-batch li[data-playing=true] { outline: 2px solid var(--accent); }
+#pg-batch .pg-line { overflow-wrap: anywhere; }
+#pg-batch li[data-error=true] .pg-line { color: var(--error); }
+#pg-batch audio { width: 100%; margin: 0; }
 </style>
 </head>
 <body>
@@ -284,7 +297,7 @@ pre { padding: 14px 16px; border-radius: var(--radius); background: var(--surfac
         <section aria-labelledby="status-title"><h2 id="status-title">Service details</h2><div id="tiles" class="tiles" style="margin-top:18px"></div></section>
         <section class="section" aria-labelledby="backend-summary-title"><div class="section-heading"><h2 id="backend-summary-title">Model connections</h2><button type="button" class="small" data-go="backends">Manage connections</button></div><div class="table-wrap"><table id="backend-table"><thead><tr><th>Model slot</th><th>Connection</th><th>Configuration</th></tr></thead><tbody id="backend-summary"></tbody></table></div><p class="muted" id="backend-note" style="margin-top:14px"></p></section>
       </section>
-      <section class="page-panel" data-panel="playground" hidden><p class="page-description">Test public tool workflows with a caller token and requester identity. Admin authentication is separate.</p><section id="playground" aria-label="Public request playground"></section><p id="playground-empty" class="muted" hidden>No public request form is available for this service.</p></section>
+      <section class="page-panel" data-panel="playground" hidden><p class="page-description">Send a real public request the way a caller would. A temporary token is made for this session and revoked when you sign out.</p><div id="pg-models" class="pg-models" aria-label="Connected models"></div><section id="playground" aria-label="Public request playground"></section><p id="playground-empty" class="muted" hidden>No public request form is available for this service.</p></section>
       <section class="page-panel" data-panel="tokens" hidden>
         <p class="page-description">One token per caller. Tokens protect MCP and HTTP API access; they never grant admin access.</p>
         <form id="token-form"><div class="form-grid"><div class="field"><label for="token-name">Caller name</label><input id="token-name" type="text" maxlength="64" autocomplete="off" required></div><div class="field"><label for="token-rate">Calls per minute (optional)</label><input id="token-rate" type="number" min="1" max="100000"></div><div class="field"><label for="token-days">Expires in days (optional)</label><input id="token-days" type="number" min="1" max="3650"></div></div><div class="row"><button class="primary" id="token-create">Create token</button></div></form>
@@ -467,7 +480,182 @@ function showOverview() {
   $("backend-summary").replaceChildren(...latestBackends.map(slot => el("tr", {},
     el("td", {textContent: slot.label}), el("td", {textContent: slot.connection || slot.url || "Not connected"}),
     el("td", {textContent: slot.url || slot.connection ? "Configured" : "Not configured"}))));
+  renderPlaygroundModels();
   $("backend-note").textContent = "Configured slots report saved addresses, not verified backend availability. Readiness follows the service’s health check.";
+}
+
+/* Playground: show the models this service is connected to, and fill choices once a token is entered */
+function renderPlaygroundModels() {
+  const chips = latestBackends.map(slot => {
+    const on = Boolean(slot.url || slot.connection);
+    const chip = el("span", {className: "slot-state"}, el("span", {className: "status-dot"}), el("span", {textContent: slot.label + (on ? "" : " not connected")}));
+    chip.setAttribute("data-state", on ? "ok" : "none");
+    return chip;
+  });
+  const manage = el("button", {type: "button", className: "small", textContent: latestBackends.some(s => s.url || s.connection) ? "Manage models" : "Connect a model"});
+  manage.onclick = () => navigation.select("backends", true);
+  $("pg-models").replaceChildren(...(chips.length ? [...chips, manage] : []));
+}
+function autoLoadChoices() {
+  const load = $("pg-load"), token = $("pg-token");
+  if (load && token?.value && !load.disabled && !$("pg-send").disabled && !$("pg-operation").disabled) load.click();
+}
+/* Model filter: services whose lookup reply carries `models` ({slot: [choices]}) get a Model picker that narrows the choices. */
+let choiceModels = null, choiceWatch;
+function applyModelFilter() {
+  const field = playground?.current().lookup?.field, input = field && $("pg-" + field.replace(/[^a-zA-Z0-9_-]/g, "-")), pick = $("pg-model-filter");
+  if (!input || !choiceModels) return;
+  const allowed = pick?.value ? new Set(choiceModels[pick.value]) : null;
+  for (const option of input.options) option.hidden = option.disabled = Boolean(allowed && option.value && !allowed.has(option.value));
+  if (input.selectedOptions[0]?.hidden) input.value = "";
+}
+async function loadChoiceModels() {
+  const lookup = playground?.current().lookup, headers = {};
+  if (!lookup) return;
+  const token = $("pg-token").value, user = $("pg-X-Requester-Username");
+  if (token) headers["X-Internal-Token"] = token;
+  if (user) headers["X-Requester-Username"] = user.value;
+  const old = $("pg-model-filter")?.value || "";
+  try {
+    const reply = await fetch(lookup.route, {headers, cache: "no-store", credentials: "omit", redirect: "error"});
+    choiceModels = reply.ok ? (await reply.json()).models || null : null;
+  } catch { choiceModels = null; }
+  const live = choiceModels ? latestBackends.filter(slot => (slot.url || slot.connection) && choiceModels[slot.key]?.length) : [];
+  $("pg-model-field")?.remove();
+  if (live.length > 1) {
+    const pick = el("select", {id: "pg-model-filter"}, el("option", {value: "", textContent: "All connected models"}),
+      ...live.map(slot => el("option", {value: slot.key, textContent: slot.label + " (" + choiceModels[slot.key].length + ")"})));
+    pick.value = live.some(slot => slot.key === old) ? old : "";
+    pick.onchange = applyModelFilter;
+    $("pg-fields").prepend(el("div", {id: "pg-model-field", className: "pg-field"}, el("label", {htmlFor: "pg-model-filter", textContent: "Model"}), pick));
+  }
+  applyModelFilter();
+}
+/* The playground signs in with a temporary caller token made from this admin session; no pasting. */
+const PLAYGROUND_TOKEN = "playground (temporary)";
+let playgroundToken = null, playgroundTokenId = "", playgroundMint = null;
+function fillPlaygroundToken() { if (playground && playgroundToken) $("pg-token").value = playgroundToken; }
+function ensurePlaygroundToken() {
+  playgroundMint ??= (async () => {
+    try {
+      for (const row of (await call("tokens")).tokens) if (row.name === PLAYGROUND_TOKEN) await call("tokens/" + encodeURIComponent(row.id), "DELETE"); // left by a closed tab
+      const made = await call("tokens", "POST", {name: PLAYGROUND_TOKEN, expires_days: 1});
+      playgroundToken = made.token; playgroundTokenId = made.id;
+      fillPlaygroundToken(); autoLoadChoices(); refreshTokens();
+    } catch (error) { playgroundMint = null; fail(error); }
+  })();
+  return playgroundMint;
+}
+function dropPlaygroundToken() {
+  if (playgroundTokenId && password) fetch("/admin/tokens/" + encodeURIComponent(playgroundTokenId), {method: "DELETE", headers: {"X-Admin-Password": password}, keepalive: true}).catch(() => {});
+  playgroundToken = null; playgroundTokenId = ""; playgroundMint = null;
+}
+/* Autoplay and batch: one request per line of text, played in order. Works on any operation with a `text` field and audio back. */
+let autoplay = false, batchOn = false, batching = false, batchStop = false, batchItems = [], playingItem = null;
+try { autoplay = localStorage.getItem("pg-autoplay") === "1"; } catch {}
+function clearBatch() {
+  for (const item of batchItems) URL.revokeObjectURL(item.url);
+  batchItems = []; playingItem = null; $("pg-batch")?.replaceChildren();
+}
+function playNextItem() {
+  if (!autoplay || playingItem) return;
+  const next = batchItems.find(item => !item.played);
+  if (!next) return;
+  next.played = true; playingItem = next; next.row.dataset.playing = "true";
+  const done = () => { next.row.dataset.playing = "false"; playingItem = null; playNextItem(); };
+  next.audio.addEventListener("ended", done, {once: true});
+  next.audio.play().catch(done);
+}
+function textField() { return $("pg-text"); }
+function updateBatchNote() {
+  const note = $("pg-batch-note"), field = textField();
+  if (!note) return;
+  const count = field ? field.value.split(/\r?\n/).filter(line => line.trim()).length : 0;
+  note.hidden = !batchOn;
+  note.textContent = count > 1 ? count + " requests will be sent, one per line, and played in order." : "Put each text on its own line to send several requests.";
+}
+function syncTools() {
+  const tools = $("pg-tools"), has = Boolean(textField()) && playground.current().response !== "stream";
+  if (tools) tools.hidden = !has;
+  if (!has) { batchOn = false; $("pg-batch-toggle")?.setAttribute("aria-pressed", "false"); }
+  updateBatchNote();
+  const field = textField();
+  if (field && !field.dataset.batchWatch) { field.dataset.batchWatch = "1"; field.addEventListener("input", updateBatchNote); }
+}
+async function runBatch() {
+  const field = textField(), original = field.value;
+  const lines = original.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  clearBatch(); batching = true; batchStop = false;
+  let done = 0;
+  try {
+    for (const line of lines) {
+      if (batchStop) break;
+      field.value = line;
+      await playground.run();
+      const failed = $("pg-status").dataset.error === "true", audio = $("pg-media").querySelector("audio");
+      const row = el("li", {}, el("span", {className: "pg-line", textContent: (batchItems.length + 1) + ". " + line}));
+      if (failed || !audio) { row.dataset.error = "true"; row.append(el("small", {textContent: $("pg-status").textContent || "No audio returned."})); $("pg-batch").append(row); break; }
+      const blob = await (await fetch(audio.src)).blob(), url = URL.createObjectURL(blob);
+      const player = el("audio", {controls: true, src: url}), ext = blob.type.includes("mpeg") ? "mp3" : "wav";
+      row.append(player, el("a", {href: url, download: "playground-" + (batchItems.length + 1) + "." + ext, textContent: "Download " + ext.toUpperCase()}));
+      $("pg-batch").append(row); batchItems.push({row, audio: player, url, played: false}); done++;
+      playNextItem();
+    }
+  } finally {
+    field.value = original; batching = false; updateBatchNote();
+    if ($("pg-status").dataset.error !== "true" || done) $("pg-status").dataset.error = done === lines.length ? "false" : "true";
+    $("pg-status").textContent = (batchStop ? "Stopped: " : "Batch: ") + done + " of " + lines.length + " done";
+    $("pg-media").replaceChildren();
+  }
+}
+function mountPlaygroundTools() {
+  const form = $("pg-form");
+  const auto = el("button", {type: "button", id: "pg-autoplay", textContent: "Autoplay"});
+  auto.setAttribute("aria-pressed", String(autoplay));
+  auto.onclick = () => {
+    autoplay = !autoplay; auto.setAttribute("aria-pressed", String(autoplay));
+    try { localStorage.setItem("pg-autoplay", autoplay ? "1" : "0"); } catch {}
+    if (autoplay) playNextItem(); else if (playingItem) playingItem.audio.pause();
+  };
+  const batch = el("button", {type: "button", id: "pg-batch-toggle", textContent: "One request per line"});
+  batch.setAttribute("aria-pressed", "false");
+  batch.onclick = () => { batchOn = !batchOn; batch.setAttribute("aria-pressed", String(batchOn)); updateBatchNote(); };
+  form.insertBefore(el("div", {id: "pg-tools", className: "pg-tools"}, auto, batch, el("small", {id: "pg-batch-note", hidden: true})), form.lastElementChild);
+  $("pg-media").after(el("ol", {id: "pg-batch", "aria-label": "Batch results"}));
+  form.addEventListener("submit", event => {
+    if (!batchOn || !textField()) { if (!batching) clearBatch(); return; }
+    if (batching) return;
+    event.preventDefault(); event.stopImmediatePropagation(); runBatch();
+  }, true);
+  $("pg-cancel").addEventListener("click", () => { batchStop = true; });
+  $("pg-reset").addEventListener("click", () => { clearBatch(); batchStop = true; });
+  new MutationObserver(records => {
+    if (!autoplay || batching) return;
+    for (const record of records) for (const added of record.addedNodes) if (added.tagName === "AUDIO") added.play().catch(() => {});
+  }).observe($("pg-media"), {childList: true});
+}
+function watchPlayground() {
+  mountPlaygroundTools(); syncTools();
+  const field = $("pg-token").closest(".pg-field");
+  field.hidden = true; if (field.nextElementSibling?.classList.contains("description")) field.nextElementSibling.hidden = true;
+  const reset = playground.reset.bind(playground);
+  playground.reset = () => { reset(); clearBatch(); fillPlaygroundToken(); };
+  ensurePlaygroundToken();
+  $("pg-token").addEventListener("change", autoLoadChoices);
+  const watchChoices = () => {
+    choiceWatch?.disconnect();
+    const field = playground.current().lookup?.field, input = field && $("pg-" + field.replace(/[^a-zA-Z0-9_-]/g, "-"));
+    if (!input) { choiceModels = null; return; }
+    choiceWatch = new MutationObserver(loadChoiceModels);
+    choiceWatch.observe(input, {childList: true});
+  };
+  let rendered;
+  new MutationObserver(() => {
+    const fresh = $("pg-operation").value + ":" + ($("pg-load") ? "l" : "");
+    if ($("pg-model-field") && rendered === fresh && choiceModels) return; // only our own Model picker changed
+    rendered = fresh; watchChoices(); autoLoadChoices(); syncTools();
+  }).observe($("pg-fields"), {childList: true});
+  watchChoices();
 }
 
 /* Status and usage */
@@ -519,7 +707,7 @@ function renderConnect(c) {
 function showStatus(data) {
   latestStatus = data;
   renderConnect(data.connect);
-  if (!playground && data.playground) playground = Playground.mount($("playground"), data.playground, {secrets: () => [password]});
+  if (!playground && data.playground) { playground = Playground.mount($("playground"), data.playground, {secrets: () => [password]}); watchPlayground(); renderPlaygroundModels(); }
   $("playground-empty").hidden = Boolean(data.playground);
   name(data.service);
   const u = data.usage;
@@ -851,7 +1039,7 @@ $("form").onsubmit = event => {
 };
 function closeSession() {
   session.abort(); session = new AbortController(); sessionVersion++;
-  playground?.reset(); forgetToken();
+  dropPlaygroundToken(); playground?.reset(); forgetToken();
   password = ""; clearInterval(refreshTimer); clearTimeout(noteTimer);
   try { sessionStorage.removeItem("admin"); } catch {}
   $("panel").hidden = true; $("signout").hidden = true; $("signin").hidden = false;
@@ -867,7 +1055,7 @@ function closeSession() {
 }
 $("signout").onclick = () => { closeSession(); $("error").textContent = ""; };
 $("refresh-status").onclick = refreshStatus;
-window.addEventListener("pagehide", () => { session.abort(); playground?.reset(); clearInterval(refreshTimer); });
+window.addEventListener("pagehide", () => { dropPlaygroundToken(); session.abort(); playground?.reset(); clearInterval(refreshTimer); });
 window.addEventListener("pageshow", event => { if (event.persisted && password) open(password); });
 if (password) open(password);
 </script>
