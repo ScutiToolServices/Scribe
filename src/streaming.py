@@ -63,7 +63,7 @@ async def _cancel(*tasks: asyncio.Task | None) -> None:
     await asyncio.gather(*pending, return_exceptions=True)
 
 
-async def serve_stream(ws: WebSocket, service, settings) -> None:
+async def serve_stream(ws: WebSocket, service, settings, voice_gate: bool | None = None) -> None:
     owner = ws.headers.get("x-requester-username", "").strip()
     if not owner:
         await ws.close(code=1008)
@@ -83,7 +83,7 @@ async def serve_stream(ws: WebSocket, service, settings) -> None:
         deadline = time.monotonic() + min(150, settings.max_seconds) + settings.timeout_s
 
         async def partial(pcm: bytes) -> None:
-            result = await asyncio.wait_for(service.infer(pcm), max(0.001, deadline - time.monotonic()))
+            result = await asyncio.wait_for(service.infer(pcm, voice_gate), max(0.001, deadline - time.monotonic()))
             await ws.send_json({"type": "partial", "text": state.update(result)})
 
         # Inference runs beside the receive loop: a slow pass must not stop audio being read, or the
@@ -131,7 +131,7 @@ async def serve_stream(ws: WebSocket, service, settings) -> None:
                     raise AudioRejected("Invalid stream command.")
                 if inflight is not None:  # let the running pass commit its words before the final one
                     await asyncio.wait_for(inflight, max(0.001, deadline - time.monotonic()))
-                result = await asyncio.wait_for(service.infer(state.pcm), max(0.001, deadline - time.monotonic())) if state.pcm else Transcript("", [], "en")
+                result = await asyncio.wait_for(service.infer(state.pcm, voice_gate), max(0.001, deadline - time.monotonic())) if state.pcm else Transcript("", [], "en")
                 await ws.send_json({"type": "final", "text": state.finish(result)})
                 await ws.close()
                 return

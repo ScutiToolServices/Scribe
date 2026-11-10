@@ -38,8 +38,8 @@ class SttEngine(Protocol):
     async def decode(self, path: Path) -> bytes:
         """16 kHz mono s16le PCM. Raises AudioRejected when ffmpeg cannot read the file."""
 
-    async def transcribe(self, pcm: bytes) -> Transcript:
-        """Raises EngineFailed."""
+    async def transcribe(self, pcm: bytes, voice_gate: bool | None = None) -> Transcript:
+        """`voice_gate` True/False forces the main-voice gate on/off for this call; None follows the setting. Raises EngineFailed."""
 
 
 class Decoder:
@@ -182,15 +182,26 @@ class RoutedEngine:
 
     def __init__(self, decoder: Decoder, model_name: str, slot: Callable[[], tuple[str, str] | None],
                  timeout_s: float | Callable[[], float] = 115,
-                 prefilter: Callable[[], Callable[[bytes], bytes] | None] | None = None) -> None:
+                 prefilter: Callable[[bool | None], Callable[[bytes], bytes] | None] | None = None) -> None:
         self._decoder, self._model_name, self._slot, self._timeout_s = decoder, model_name, slot, as_getter(timeout_s)
-        self._prefilter = prefilter or (lambda: None)  # read per call; None = off (e.g. no voiceprint enrolled)
+        # Called per request with True/False (the caller's choice) or None (follow the setting). It returns the filter, or
+        # None when the gate is off or not set up (no voiceprint enrolled, extra not installed).
+        self._prefilter = prefilter or (lambda force=None: None)
+
+    def _filter(self, voice_gate: bool | None):
+        return None if voice_gate is False else self._prefilter(voice_gate)
+
+    def gate_active(self, voice_gate: bool | None = None) -> bool:
+        return self._filter(voice_gate) is not None
+
+    def name_for(self, voice_gate: bool | None = None) -> str:
+        """The transcript cache key: gated transcripts differ from plain ones, so the gate's tag joins the name."""
+        tag = getattr(self._filter(voice_gate), "tag", "")
+        return f"{self._model_name}+{tag}" if tag else self._model_name
 
     @property
     def model_name(self) -> str:
-        """The transcript cache key: gated transcripts differ from plain ones, so the gate's tag joins the name."""
-        tag = getattr(self._prefilter(), "tag", "")
-        return f"{self._model_name}+{tag}" if tag else self._model_name
+        return self.name_for(None)
 
     @property
     def is_remote(self) -> bool:
@@ -199,11 +210,11 @@ class RoutedEngine:
     async def decode(self, path: Path) -> bytes:
         return await self._decoder.decode(path)
 
-    async def transcribe(self, pcm: bytes) -> Transcript:
+    async def transcribe(self, pcm: bytes, voice_gate: bool | None = None) -> Transcript:
         remote = self._slot()
         if remote is None:
             raise EngineFailed("No speech model service is connected. Save a connection on the Scribe admin page.")
-        keep_main_voice = self._prefilter()
+        keep_main_voice = self._filter(voice_gate)
         if keep_main_voice is not None:
             try:
                 pcm = await asyncio.to_thread(keep_main_voice, pcm)

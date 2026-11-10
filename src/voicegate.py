@@ -72,20 +72,44 @@ def noise_floor(samples: np.ndarray, minimum: float = 0.01) -> float:
     return max(minimum, 1.5 * float(np.percentile(levels, 10)))
 
 
-def gate(pcm: bytes, voiceprint: np.ndarray, embed: Embedder, threshold: float = 0.4, floor: float | None = None) -> bytes:
-    """PCM with other voices silenced. Cosine similarity >= `threshold` keeps a segment. If every judged segment fails
-    the input is returned unchanged: an empty transcript is worse than a noisy one (shortcut: a wrong voiceprint is not
-    detected here, upgrade by surfacing a 'no match' note)."""
-    if len(pcm) < 2:
-        return pcm
-    samples = np.frombuffer(pcm, dtype="<i2").astype(np.float32) / 32768
+def drop_ranges(samples: np.ndarray, voiceprint: np.ndarray, embed: Embedder, threshold: float = 0.4,
+                floor: float | None = None) -> list[tuple[int, int]]:
+    """[start, end) sample ranges (16 kHz) that are not the voiceprint's voice: judged segments under `threshold`
+    cosine similarity. Empty when nothing is dropped or when every judged segment fails: an empty transcript is worse
+    than a noisy one (shortcut: a wrong voiceprint is not detected here, upgrade by surfacing a 'no match' note)."""
     drop, kept = [], 0
     for a, b in _segments(samples, noise_floor(samples) if floor is None else floor):
         if (b - a) < MIN_JUDGE_S * RATE or float(_unit(embed(samples[a:b])) @ voiceprint) >= threshold:
             kept += 1
         else:
             drop.append((a, b))
-    if not drop or not kept:
+    return drop if kept else []
+
+
+def dominant_voiceprint(samples: np.ndarray, embed: Embedder, floor: float | None = None, match: float = 0.3) -> np.ndarray | None:
+    """The voice that speaks most in this recording, for a clip with no enrolled voice (a voice-clone reference): the
+    judged segment that the most speech time agrees with (cosine >= `match`), averaged over that supporting speech.
+    Counting time, not segments, so a tight cluster of two clean segments cannot beat a longer, noisier speaker (measured
+    on a noisy recording against a text-to-speech voice: a noisy speaker's own segments agree at only 0.3-0.5, a clean
+    voice's at about 0.7, hence a match lower than the keep threshold). None when there is no segment long enough to judge."""
+    spans = [(a, b) for a, b in _segments(samples, noise_floor(samples) if floor is None else floor) if (b - a) >= MIN_JUDGE_S * RATE]
+    if not spans:
+        return None
+    stack = np.stack([_unit(embed(samples[a:b])) for a, b in spans])
+    seconds = np.array([b - a for a, b in spans], dtype=np.float32)
+    support = ((stack @ stack.T) >= match) @ seconds
+    best = int(np.argmax(support))
+    agree = (stack @ stack[best]) >= match
+    return _unit((stack[agree] * seconds[agree, None]).sum(axis=0))
+
+
+def gate(pcm: bytes, voiceprint: np.ndarray, embed: Embedder, threshold: float = 0.4, floor: float | None = None) -> bytes:
+    """PCM with other voices silenced (see `drop_ranges`)."""
+    if len(pcm) < 2:
+        return pcm
+    samples = np.frombuffer(pcm, dtype="<i2").astype(np.float32) / 32768
+    drop = drop_ranges(samples, voiceprint, embed, threshold, floor)
+    if not drop:
         return pcm
     out = bytearray(pcm)
     for a, b in drop:
@@ -163,3 +187,21 @@ def build_prefilter(voice_dir: Path, threshold: float, _cache: dict = {}) -> Voi
         return VoicePrefilter(_cache["embed"], _cache["voiceprint"], threshold, f"voice{stamp[1]}")
     except (OSError, ImportError):
         return None
+
+
+def build_embedder(model: Path, _cache: dict = {}) -> OnnxEmbedder | None:
+    """The speaker model from a local file, loaded once per file version. None when the file or the "voice" extra
+    (numpy, onnxruntime) is missing."""
+    try:
+        stamp = model.stat().st_mtime_ns
+        if _cache.get("stamp") != stamp:
+            _cache.clear()
+            _cache.update(stamp=stamp, embed=OnnxEmbedder(model))
+        return _cache["embed"]
+    except (OSError, ImportError):
+        return None
+
+
+def speech_seconds(samples: np.ndarray, floor: float | None = None) -> float:
+    """Seconds of speech (above the noise floor) in 16 kHz samples."""
+    return sum(b - a for a, b in _segments(samples, noise_floor(samples) if floor is None else floor)) / RATE

@@ -88,6 +88,13 @@ CONNECT = {
 }
 
 
+def flag(value: str | None):
+    """?voice_gate=: True/False for true/false (also 1/0, on/off), None when absent, "bad" for anything else."""
+    if value is None or value == "":
+        return None
+    return {"true": True, "1": True, "on": True, "false": False, "0": False, "off": False}.get(value.lower(), "bad")
+
+
 def voice_prefilter(voice_dir, threshold):
     """The main-voice gate, or None when the optional "voice" extra (numpy, onnxruntime) is not installed."""
     try:
@@ -109,7 +116,8 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
         Decoder(lambda: settings.ffmpeg, max_seconds=lambda: settings.max_seconds, decode_timeout_s=lambda: settings.timeout_s),
         settings.model,
         lambda: backends.get("whisper"), timeout_s=lambda: settings.timeout_s + 5,
-        prefilter=lambda: voice_prefilter(base.voice_dir, settings.voice_gate_threshold) if settings.voice_gate else None,
+        prefilter=lambda force=None: voice_prefilter(base.voice_dir, settings.voice_gate_threshold)
+        if (settings.voice_gate if force is None else force) else None,
     )
     store = AudioStore(base.audio_dir, lambda: settings.ttl_seconds, lambda: settings.quota_bytes)
     store.sweep()
@@ -127,6 +135,7 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
         styling: Annotated[Literal[STYLINGS], Field(description="Tone of the cleaned text.")] = "semi-formal",
         structure: Annotated[Literal[STRUCTURES], Field(description="Cleaned text as prose or as lists.")] = "prose",
         context: Annotated[Literal[CONTEXTS], Field(description="Where the text goes: 'email' for an email, else 'general'.")] = "general",
+        voice_gate: Annotated[bool | None, Field(description="Keep only the main (enrolled) voice: true silences other voices, false leaves the audio as it is, omitted follows the service setting. Needs a voice set up on the service; without it the result says it was skipped.")] = None,
         ctx: Context = None,
     ) -> TranscribeResult:
         """Transcribe an attached English audio file to text. The file belongs to the asking user and expires
@@ -134,7 +143,7 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
         try:
             owner = owner_from_context(ctx)
             async with usage.track(owner, "transcribe"):
-                return await service.transcribe(owner, file_id, timestamps, Cleanup(styling, structure, context) if cleanup else None)
+                return await service.transcribe(owner, file_id, timestamps, Cleanup(styling, structure, context) if cleanup else None, voice_gate)
         except ScribeError as error:
             raise ToolError(str(error)) from error
 
@@ -160,13 +169,20 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
             cleanup = Cleanup(query.get("styling", "semi-formal"), query.get("structure", "prose"), query.get("context", "general"))
             if cleanup.styling not in STYLINGS or cleanup.structure not in STRUCTURES or cleanup.context not in CONTEXTS:
                 return JSONResponse({"error": "bad_cleanup", "message": "Unknown styling, structure or context."}, status_code=422)
+        voice_gate = flag(query.get("voice_gate"))
+        if voice_gate == "bad":
+            return JSONResponse({"error": "bad_voice_gate", "message": "voice_gate must be true or false."}, status_code=422)
         try:
             stored, expires_at = await service.upload(owner, filename, data)
             if request.url.path == "/api/transcribe":
                 async with usage.track(owner, "transcribe"):
-                    result = await service.transcribe(owner, stored.file_id, False, cleanup)
+                    result = await service.transcribe(owner, stored.file_id, False, cleanup, voice_gate)
                 body = {"text": result.text, "duration_s": result.duration_s}
-                return JSONResponse({**body, "cleaned": result.cleaned} if cleanup else body)
+                if cleanup:
+                    body["cleaned"] = result.cleaned
+                if voice_gate is not None:
+                    body["voice_gate"] = result.voice_gate
+                return JSONResponse(body)
         except QuotaExceeded as error:
             return JSONResponse({"error": error.code, "message": str(error)}, status_code=413)
         except AudioRejected as error:
@@ -193,8 +209,11 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
                 data.extend(chunk)
                 if len(data) > settings.max_bytes:
                     return JSONResponse({"error": "too_large"}, status_code=413)
+            voice_gate = flag(request.query_params.get("voice_gate"))
+            if voice_gate == "bad":
+                return JSONResponse({"error": "bad_voice_gate", "message": "voice_gate must be true or false."}, status_code=422)
             async with usage.track(owner, "partial"):
-                text, duration = await service.partial(owner, bytes(data))
+                text, duration = await service.partial(owner, bytes(data), voice_gate)
             return JSONResponse({"text": text, "duration_s": duration})
         except QuotaExceeded:
             return JSONResponse({"error": "quota_exceeded", "message": "Your audio storage is full."}, status_code=413)
@@ -207,11 +226,13 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
 
     async def stream(websocket: WebSocket) -> None:
         owner = websocket.headers.get("x-requester-username", "").strip()
+        gate = flag(websocket.query_params.get("voice_gate"))
+        gate = None if gate == "bad" else gate  # a typo falls back to the setting rather than refusing a live stream
         if not owner:  # serve_stream refuses it; nothing to count
-            await serve_stream(websocket, service, settings)
+            await serve_stream(websocket, service, settings, gate)
             return
         async with usage.track(owner, "dictation"):
-            await serve_stream(websocket, service, settings)
+            await serve_stream(websocket, service, settings, gate)
 
     async def status() -> list[dict[str, str]]:
         remote = backends.get("whisper")

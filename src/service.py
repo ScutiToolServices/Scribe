@@ -52,7 +52,12 @@ class ScribeService:
     def unreserve(self, key: object) -> None:
         self._reservations.pop(key, None)
 
-    async def infer(self, pcm: bytes):
+    def _name(self, voice_gate: bool | None) -> str:
+        """The transcript cache key for this call: gated and plain transcripts are stored apart."""
+        name_for = getattr(self._engine, "name_for", None)
+        return name_for(voice_gate) if name_for else self._engine.model_name
+
+    async def infer(self, pcm: bytes, voice_gate: bool | None = None):
         # The task owns the slot until the worker really finishes. Cancelling a
         # to_thread await cannot stop Whisper and must never free its slot early.
         started = False
@@ -60,7 +65,8 @@ class ScribeService:
             nonlocal started
             async with self._slots:
                 started = True
-                return await self._engine.transcribe(pcm)
+                # Fake engines and older ones take no flag: only pass it when the caller chose.
+                return await (self._engine.transcribe(pcm) if voice_gate is None else self._engine.transcribe(pcm, voice_gate=voice_gate))
 
         task = asyncio.create_task(run())
         self._inflight.add(task)
@@ -83,7 +89,7 @@ class ScribeService:
         except Exception as error:
             raise EngineFailed("Transcription failed. Try again.") from error
 
-    async def partial(self, owner: str, data: bytes) -> tuple[str, float]:
+    async def partial(self, owner: str, data: bytes, voice_gate: bool | None = None) -> tuple[str, float]:
         key = object()
         try:
             await self.reserve(key, owner, len(data))
@@ -92,7 +98,7 @@ class ScribeService:
             duration = len(pcm) / PCM_BYTES_PER_SECOND
             if duration > min(150, self._settings.max_seconds):
                 raise AudioRejected("That audio is too long.")
-            result = await self.infer(pcm)
+            result = await self.infer(pcm, voice_gate)
             return result.text, duration
         finally:
             self.unreserve(key)
@@ -130,7 +136,8 @@ class ScribeService:
         finally:
             await asyncio.to_thread(path.unlink, missing_ok=True)
 
-    async def transcribe(self, owner: str, file_id: str, timestamps: bool, cleanup: Cleanup | None = None) -> TranscribeResult:
+    async def transcribe(self, owner: str, file_id: str, timestamps: bool, cleanup: Cleanup | None = None,
+                         voice_gate: bool | None = None) -> TranscribeResult:
         if not owner:
             raise IdentityRequired("Scribe needs to know who is asking.")
         key = (owner, file_id)
@@ -140,15 +147,20 @@ class ScribeService:
                 stored = await asyncio.to_thread(self._store.get, owner, file_id)
                 if stored is None:
                     raise FileNotFound("That audio file expired or does not exist. Attach it again.")
-                payload = await asyncio.to_thread(self._store.get_transcript, owner, file_id, self._engine.model_name)
+                payload = await asyncio.to_thread(self._store.get_transcript, owner, file_id, self._name(voice_gate))
                 cached = payload is not None
                 if payload is None:
-                    payload = await self._run(owner, stored)
+                    payload = await self._run(owner, stored, voice_gate)
         finally:
             if not lock.locked() and not getattr(lock, "_waiters", None):
                 self._locks.pop(key, None)
         segments = [SegmentOut(**s) for s in payload["segments"]] if timestamps else None
         text, note = payload["text"], ""
+        gate_on = False
+        if voice_gate is True:
+            gate_on = getattr(self._engine, "gate_active", lambda *_: False)(True)
+            if not gate_on:
+                note += " Voice gate skipped: no voice is set up on this service."
         if cleanup is not None:  # the cache keeps the raw transcript; cleanup is applied per call
             if not self._cleaner.connected:
                 note = " Cleanup skipped: no cleanup service is connected."
@@ -159,16 +171,16 @@ class ScribeService:
                     note = " Cleanup failed, so this is the raw transcript."
         return TranscribeResult(
             text=text, duration_s=stored.duration_s, language=payload["language"],
-            segments=segments, cached=cached, cleaned=cleanup is not None and not note,
+            segments=segments, cached=cached, cleaned=cleanup is not None and "Cleanup" not in note, voice_gate=gate_on,
             message=f"Transcribed {stored.duration_s:.0f} s of audio ({len(payload['text'].split())} words).{note}",
         )
 
-    async def _run(self, owner: str, stored: StoredAudio) -> dict:
+    async def _run(self, owner: str, stored: StoredAudio, voice_gate: bool | None = None) -> dict:
         pcm = await self._engine.decode(stored.path)
-        transcript = await self.infer(pcm)
+        transcript = await self.infer(pcm, voice_gate)
         payload = {
             "text": transcript.text, "language": transcript.language,
             "segments": [{"start_s": s.start_s, "end_s": s.end_s, "text": s.text} for s in transcript.segments],
         }
-        await asyncio.to_thread(self._store.put_transcript, owner, stored.file_id, self._engine.model_name, payload)
+        await asyncio.to_thread(self._store.put_transcript, owner, stored.file_id, self._name(voice_gate), payload)
         return payload

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Main-voice gate on or off per request
+
+`tool_scribe_transcribe` takes `voice_gate`, and `POST /api/transcribe`, `POST /api/transcribe-partial` and `WS /api/stream` take `?voice_gate=true|false`. Omitted follows the service setting. The result carries `voice_gate` (whether the gate ran); forcing it on with no voice set up runs without it and says so in `message`. Gated and plain transcripts are cached apart.
+
 ### Main-voice gate (optional)
 
 Silences speech that does not sound like an enrolled voice before the PCM goes to the Whisper service, so other voices are not transcribed. Off by default: needs `uv sync --extra voice`, a WeSpeaker-style ONNX speaker model at `<data>/voice/speaker.onnx` and a voiceprint from `tools/enroll_voice.py`. Admin settings `voice_gate` and `voice_gate_threshold` (env `SERVICE_VOICE_GATE`, `SERVICE_VOICE_GATE_THRESHOLD`). Gated transcripts are cached apart from plain ones. Not tuned on real recordings.
