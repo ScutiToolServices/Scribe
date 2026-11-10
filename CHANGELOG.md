@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Playground works behind a path-prefix proxy
+
+The Try it panel built its request URLs from the page origin, so behind ServiceHub (`/s/<id>/`) it called the hub's root and got 404 Not Found. It now resolves routes against the service root (`../` from the admin page). Same-origin checking is unchanged.
+
+
 ### Playground: no token to paste, model picker, autoplay and batch
 
 The playground signs in with a temporary caller token made from the admin session (named `playground (temporary)`, revoked on sign-out), so the service token field is gone. Choices such as voices load by themselves, and a strip above the form shows which models are connected. Services whose lookup reply carries `models` get a Model picker that narrows the choices. Operations with a text field and audio back get an Autoplay toggle and a "One request per line" toggle that sends each line as its own request and plays the results in order.
