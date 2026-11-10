@@ -33,6 +33,9 @@ class Settings:
     stream_max_frame_bytes: int = 64000
     stream_idle_s: float = 15
     stream_window_s: float = 30
+    # Main-voice gate: needs data_dir/voice/speaker.onnx and main.npy (tools/enroll_voice.py); off without them.
+    voice_gate: bool = False
+    voice_gate_threshold: float = 0.4
     # Unlocks /admin/ (settings page). Empty = the page is off and settings stay as the environment set them.
     admin_password: str = ""
 
@@ -40,6 +43,10 @@ class Settings:
     def state_dir(self) -> Path:
         """Where settings.json and backends.json live: the first data folder, even after the data folder was moved."""
         return self.config_dir or self.data_dir
+
+    @property
+    def voice_dir(self) -> Path:
+        return self.data_dir / "voice"
 
     @property
     def audio_dir(self) -> Path:
@@ -73,6 +80,8 @@ def _from_environment() -> Settings:
         stream_max_frame_bytes=int(env("SERVICE_STREAM_MAX_FRAME_BYTES", "64000")),
         stream_idle_s=float(env("SERVICE_STREAM_IDLE_S", "15")),
         stream_window_s=float(env("SERVICE_STREAM_WINDOW_S", "30")),
+        voice_gate=env("SERVICE_VOICE_GATE", "").strip().lower() in ("1", "true", "yes", "on"),
+        voice_gate_threshold=float(env("SERVICE_VOICE_GATE_THRESHOLD", "0.4")),
         admin_password=env("SERVICE_ADMIN_PASSWORD", ""),
     )
 

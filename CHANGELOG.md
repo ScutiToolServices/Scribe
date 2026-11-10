@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Main-voice gate (optional)
+
+Silences speech that does not sound like an enrolled voice before the PCM goes to the Whisper service, so other voices are not transcribed. Off by default: needs `uv sync --extra voice`, a WeSpeaker-style ONNX speaker model at `<data>/voice/speaker.onnx` and a voiceprint from `tools/enroll_voice.py`. Admin settings `voice_gate` and `voice_gate_threshold` (env `SERVICE_VOICE_GATE`, `SERVICE_VOICE_GATE_THRESHOLD`). Gated transcripts are cached apart from plain ones. Not tuned on real recordings.
+
 ### Playground works behind a path-prefix proxy
 
 The Try it panel built its request URLs from the page origin, so behind ServiceHub (`/s/<id>/`) it called the hub's root and got 404 Not Found. It now resolves routes against the service root (`../` from the admin page). Same-origin checking is unchanged.

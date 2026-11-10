@@ -88,6 +88,15 @@ CONNECT = {
 }
 
 
+def voice_prefilter(voice_dir, threshold):
+    """The main-voice gate, or None when the optional "voice" extra (numpy, onnxruntime) is not installed."""
+    try:
+        from src.voicegate import build_prefilter
+    except ImportError:
+        return None
+    return build_prefilter(voice_dir, threshold)
+
+
 def build_app(settings: Settings, engine: SttEngine | None = None, config: Config | None = None) -> Starlette:
     """`config` (default: from SERVICE_ADMIN_PASSWORD, see options.make_config) makes the options in options.py
     changeable on /admin/ while running; without it they stay as the environment set them."""
@@ -100,6 +109,7 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
         Decoder(lambda: settings.ffmpeg, max_seconds=lambda: settings.max_seconds, decode_timeout_s=lambda: settings.timeout_s),
         settings.model,
         lambda: backends.get("whisper"), timeout_s=lambda: settings.timeout_s + 5,
+        prefilter=lambda: voice_prefilter(base.voice_dir, settings.voice_gate_threshold) if settings.voice_gate else None,
     )
     store = AudioStore(base.audio_dir, lambda: settings.ttl_seconds, lambda: settings.quota_bytes)
     store.sweep()

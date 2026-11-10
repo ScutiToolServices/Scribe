@@ -22,6 +22,8 @@ FIELDS = {
     "stream_idle_s": ("stream_idle_s", float),
     "stream_window_s": ("stream_window_s", float),
     "ffmpeg": ("ffmpeg", str),
+    "voice_gate": ("voice_gate", bool),
+    "voice_gate_threshold": ("voice_gate_threshold", float),
 }
 
 _TUNED = "Armory cancels a call after 120 s: raise only after benchmarking (scripts/bench.py)"
@@ -46,6 +48,10 @@ def schema(base: Settings) -> list[Setting]:
         Setting("stream_idle_s", "Dictation idle timeout (seconds)", "float", base.stream_idle_s, minimum=1, maximum=300),
         Setting("stream_window_s", "Dictation audio window (seconds)", "float", base.stream_window_s, minimum=5, maximum=120),
         Setting("ffmpeg", "ffmpeg program", "text", base.ffmpeg, blank=False, help="A name on PATH or a full path"),
+        Setting("voice_gate", "Keep only the main voice", "bool", base.voice_gate,
+                help="Silences other voices before transcribing. Needs the speaker model and an enrolled voice in the data folder's voice/ (tools/enroll_voice.py); without them it does nothing."),
+        Setting("voice_gate_threshold", "Main-voice match (0-1)", "float", base.voice_gate_threshold, minimum=0.05, maximum=0.95,
+                help="Higher drops more of other voices but may drop the main voice. Tune on real recordings."),
         Setting("data_path", "Data folder", "text", "", restart=True,
                 help=f"Where stored data (uploaded audio and model files) goes. Empty = {base.state_dir}. Applies after a restart; files already stored are not moved. "
                      f"Settings and saved model connections stay in the standard folder."),

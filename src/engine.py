@@ -181,8 +181,16 @@ class RoutedEngine:
     by it."""
 
     def __init__(self, decoder: Decoder, model_name: str, slot: Callable[[], tuple[str, str] | None],
-                 timeout_s: float | Callable[[], float] = 115) -> None:
-        self._decoder, self.model_name, self._slot, self._timeout_s = decoder, model_name, slot, as_getter(timeout_s)
+                 timeout_s: float | Callable[[], float] = 115,
+                 prefilter: Callable[[], Callable[[bytes], bytes] | None] | None = None) -> None:
+        self._decoder, self._model_name, self._slot, self._timeout_s = decoder, model_name, slot, as_getter(timeout_s)
+        self._prefilter = prefilter or (lambda: None)  # read per call; None = off (e.g. no voiceprint enrolled)
+
+    @property
+    def model_name(self) -> str:
+        """The transcript cache key: gated transcripts differ from plain ones, so the gate's tag joins the name."""
+        tag = getattr(self._prefilter(), "tag", "")
+        return f"{self._model_name}+{tag}" if tag else self._model_name
 
     @property
     def is_remote(self) -> bool:
@@ -195,4 +203,10 @@ class RoutedEngine:
         remote = self._slot()
         if remote is None:
             raise EngineFailed("No speech model service is connected. Save a connection on the Scribe admin page.")
+        keep_main_voice = self._prefilter()
+        if keep_main_voice is not None:
+            try:
+                pcm = await asyncio.to_thread(keep_main_voice, pcm)
+            except Exception:  # a broken gate must not break transcription: send the audio as it was
+                pass
         return await remote_transcribe(remote[0], remote[1], pcm, self._timeout_s())
