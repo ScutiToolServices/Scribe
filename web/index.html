@@ -517,7 +517,7 @@ async function loadChoiceModels() {
   if (user) headers["X-Requester-Username"] = user.value;
   const old = $("pg-model-filter")?.value || "";
   try {
-    const reply = await fetch(lookup.route, {headers, cache: "no-store", credentials: "omit", redirect: "error"});
+    const reply = await fetch(playground.url(lookup.route), {headers, cache: "no-store", credentials: "omit", redirect: "error"});
     choiceModels = reply.ok ? (await reply.json()).models || null : null;
   } catch { choiceModels = null; }
   const live = choiceModels ? latestBackends.filter(slot => (slot.url || slot.connection) && choiceModels[slot.key]?.length) : [];
@@ -547,7 +547,7 @@ function ensurePlaygroundToken() {
   return playgroundMint;
 }
 function dropPlaygroundToken() {
-  if (playgroundTokenId && password) fetch("/admin/tokens/" + encodeURIComponent(playgroundTokenId), {method: "DELETE", headers: {"X-Admin-Password": password}, keepalive: true}).catch(() => {});
+  if (playgroundTokenId && password) fetch("../admin/tokens/" + encodeURIComponent(playgroundTokenId), {method: "DELETE", headers: {"X-Admin-Password": password}, keepalive: true}).catch(() => {});
   playgroundToken = null; playgroundTokenId = ""; playgroundMint = null;
 }
 /* Autoplay and batch: one request per line of text, played in order. Works on any operation with a `text` field and audio back. */
