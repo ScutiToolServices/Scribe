@@ -10,13 +10,14 @@
 /* Shared tool-service shell. Service data and capabilities come from authenticated metadata. */
 :root {
   --bg: light-dark(#ffffff, #19191c);
-  --surface: light-dark(#f5f5f4, #202023);
-  --text: light-dark(#222225, #eeeeef);
-  --muted: light-dark(#67676e, #b0b0b8);
-  --border: light-dark(#e5e5e7, #39393e);
-  --accent: light-dark(#ad3e0b, #ff935a);
+  --page: light-dark(#f5f7fb, #131315);
+  --surface: light-dark(#f3f5fa, #202023);
+  --text: light-dark(#1a2132, #eeeeef);
+  --muted: light-dark(#5c6578, #b0b0b8);
+  --border: light-dark(#dde2eb, #39393e);
+  --accent: light-dark(#4444c6, #ff935a);
   --accent-contrast: light-dark(#ffffff, #19191c);
-  --selected: light-dark(#fff1e8, #3b2b23);
+  --selected: light-dark(#edeeff, #3b2b23);
   --ok: light-dark(#17734f, #79d9b0);
   --ok-bg: light-dark(#edf8f2, #20392f);
   --warning: light-dark(#865900, #f1cb76);
@@ -26,7 +27,7 @@
   color-scheme: light dark;
   font: 14px/1.5 system-ui, "Segoe UI", sans-serif;
   color: var(--text);
-  background: var(--bg);
+  background: var(--page);
   accent-color: var(--accent);
   scrollbar-color: var(--border) var(--bg);
 }
@@ -59,52 +60,88 @@ small { display: block; margin-top: 6px; color: var(--muted); }
 .signin img { width: 42px; height: 42px; margin-bottom: 18px; }
 .signin h1 { font-size: 1.65rem; margin-bottom: 8px; }
 .signin .muted { margin-bottom: 24px; }
-.app-shell { display: grid; grid-template-columns: 224px minmax(0, 1fr); min-height: 100svh; }
-.sidebar { display: flex; flex-direction: column; gap: 26px; position: sticky; top: 0; height: 100svh; padding: 26px 16px 18px; background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; }
-.brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
-.brand img { width: 32px; height: 32px; flex-shrink: 0; }
-.brand strong, .identity strong { display: block; font-weight: 600; }
-.brand small { margin: 2px 0 0; font-size: .8rem; }
-.identity { padding: 0 8px; overflow-wrap: anywhere; }
-.identity strong { font-size: 1.15rem; }
-.identity small { margin-top: 3px; font-size: .85rem; }
-.navigation { display: grid; gap: 4px; }
-.nav-item { width: 100%; justify-content: flex-start; gap: 10px; padding: 10px; border: 0; background: transparent; color: var(--muted); text-align: left; }
-.nav-item:hover { background: var(--border); color: var(--text); }
-.nav-item[aria-current=page] { background: var(--selected); color: var(--accent); font-weight: 600; }
-.sidebar-footer { margin-top: auto; display: grid; gap: 12px; padding: 0 8px; }
-.sidebar-footer small { font-size: .8rem; }
-.workspace { min-width: 0; }
-.main-header { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 28px; min-height: 70px; background: var(--bg); border-bottom: 1px solid var(--border); }
-.main-header h1 { margin-right: auto; }
-.main-header button { font-size: .85rem; }
-.health-status { display: inline-flex; align-items: center; gap: 7px; font-size: .85rem; color: var(--muted); }
+.content { max-width: 1320px; margin-inline: auto; padding: 32px 34px 24px; }
+.service-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+.service-heading h1 { font-size: 2.8rem; line-height: 1.07; font-weight: 680; letter-spacing: -.035em; overflow-wrap: anywhere; }
+.service-title { display: flex; align-items: center; gap: 15px; min-width: 0; }
+.service-title p { margin-top: 6px; }
+.service-mark { display: grid; place-items: center; width: 58px; height: 58px; flex: none; border: 1px solid var(--border); border-radius: 12px; background: var(--selected); color: var(--accent); }
+.service-mark .icon, .service-mark img { grid-area: 1 / 1; width: 32px; height: 32px; object-fit: contain; }
+.service-mark:has(img[data-loaded]) .icon { visibility: hidden; }
+.service-mark img:not([data-loaded]) { visibility: hidden; }
+.navigation { display: flex; flex-wrap: wrap; column-gap: 22px; border-bottom: 1px solid var(--border); margin-bottom: 22px; }
+.nav-item { min-height: 42px; padding: 9px 1px 11px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; margin-bottom: -1px; background: transparent; color: var(--muted); font-weight: 590; }
+.nav-item:hover { background: transparent; color: var(--accent); }
+.nav-item[aria-current=page] { border-bottom-color: var(--accent); color: var(--accent); }
+.service-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 9px; margin-top: 20px; }
+.health-banner { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.health-banner h2 { font-size: 1rem; }
+.health-banner p { color: var(--muted); margin-top: 2px; font-size: .92rem; max-width: 70ch; }
+.health-mark { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--bg); }
+.health-banner[data-state=ready] { background: var(--ok-bg); }
+.health-banner[data-state=not-ready] { background: var(--warning-bg); }
+.health-banner[data-state=ready] .health-mark, .health-status[data-state=ready] { color: var(--ok); }
+.health-banner[data-state=not-ready] .health-mark, .health-status[data-state=not-ready] { color: var(--warning); }
+.health-banner[data-state=unavailable] .health-mark, .health-status[data-state=unavailable] { color: var(--error); }
+.health-status { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; white-space: nowrap; font-size: .85rem; color: var(--muted); }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.health-status[data-state=ready] { color: var(--ok); }
-.health-status[data-state=not-ready] { color: var(--warning); }
-.health-status[data-state=unavailable] { color: var(--error); }
-.content { max-width: 1200px; padding: 30px 28px 48px; }
+.health-banner button { flex: none; }
+.overview-panel { overflow: hidden; min-width: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); }
+.summary { display: flex; flex-wrap: wrap; margin-bottom: 18px; }
+.summary-item { flex: 1 1 24%; min-width: 0; padding: 14px 16px; }
+.summary-item:not(:last-child) { border-right: 1px solid var(--border); }
+.summary-item p { display: flex; align-items: center; gap: 7px; font-size: .9rem; color: var(--muted); }
+.summary-item .icon { width: 16px; height: 16px; }
+.summary-item strong { display: block; margin-top: 3px; font-size: 1.75rem; line-height: 1.25; font-weight: 660; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.summary-item small { margin-top: 4px; }
+.overview-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 18px; margin-bottom: 18px; }
+.overview-heading { display: flex; align-items: start; justify-content: space-between; gap: 10px; padding: 15px 17px 12px; }
+.overview-heading p { margin-top: 3px; font-size: .9rem; }
+.overview-empty { padding: 4px 17px 16px; font-size: .9rem; }
+.activity { list-style: none; margin: 0; padding: 0 17px 16px; }
+.activity li { display: grid; gap: 5px; padding-block: 6px; }
+.activity-label { display: flex; justify-content: space-between; gap: 10px; overflow-wrap: anywhere; }
+.activity-label strong { font-variant-numeric: tabular-nums; }
+.activity meter { width: 100%; height: 11px; accent-color: var(--accent); }
+.activity meter::-webkit-meter-bar { border: 0; background: var(--selected); }
+.activity meter::-webkit-meter-optimum-value { background: var(--accent); }
+.tiles { margin: 0; padding: 0 17px 10px; }
+.tile { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 10px; border-top: 1px solid var(--border); padding: 9px 0; font-size: .9rem; }
+.tile dt { color: var(--muted); }
+.tile dd { text-align: right; font-weight: 580; overflow-wrap: anywhere; }
+.overview-table { margin: 0; }
+.overview-table th, .overview-table td { padding: 9px 17px; border-bottom: 0; border-top: 1px solid var(--border); }
+.overview-table :is(th, td):first-child { padding-left: 17px; }
+.overview-table :is(th, td):last-child { padding-right: 17px; }
+.overview-table th { background: var(--surface); }
+#overview-backends { margin-top: 18px; }
+@media (max-width: 850px) {
+  .content { padding-inline: 20px; }
+  .navigation { column-gap: 16px; }
+  .form-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .content { padding: 23px 15px; }
+  .service-heading { margin-bottom: 14px; }
+  .service-heading h1 { font-size: 2.1rem; }
+  .service-mark { width: 44px; height: 44px; }
+  .service-mark img, .service-mark .icon { width: 25px; height: 25px; }
+  .navigation { gap: 2px 15px; }
+  .nav-item { min-height: 44px; }
+  .health-banner { flex-wrap: wrap; padding: 12px; }
+  .health-banner > div { flex: 1 1 75%; }
+  .health-status { margin-left: 0; }
+  .summary-item { flex-basis: 50%; border-bottom: 1px solid var(--border); }
+  .summary-item:nth-child(even) { border-right: 0; }
+  .summary-item:nth-last-child(-n+2) { border-bottom: 0; }
+  .overview-grid { grid-template-columns: minmax(0,1fr); }
+  .connect-row { flex-wrap: wrap; }
+  table:not(.overview-table) { min-width: 430px; }
+}
 .page-panel { min-width: 0; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
 .section { margin-top: 26px; padding-top: 24px; border-top: 1px solid var(--border); }
 .section > .muted { margin: 6px 0 16px; }
-.health-banner { display: flex; align-items: flex-start; gap: 14px; padding: 20px; border-radius: 10px; background: var(--surface); margin-bottom: 26px; }
-.health-banner > .icon { margin-top: 3px; }
-.health-banner[data-state=ready] { background: var(--ok-bg); }
-.health-banner[data-state=ready] > .icon { color: var(--ok); }
-.health-banner[data-state=not-ready] { background: var(--warning-bg); }
-.health-banner[data-state=not-ready] > .icon { color: var(--warning); }
-.health-banner p { color: var(--muted); margin-top: 5px; max-width: 70ch; }
-.health-banner button { margin-left: auto; }
-.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; margin-bottom: 30px; }
-.summary-item { border-right: 1px solid var(--border); padding-right: 16px; }
-.summary-item:last-child { border: 0; }
-.summary-item dt, .summary-item small { color: var(--muted); font-size: .85rem; }
-.summary-item dd { font-size: 1.85rem; font-weight: 600; line-height: 1.3; letter-spacing: -.02em; margin: 7px 0 3px; font-variant-numeric: tabular-nums; }
-.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 32px; }
-.tile { display: flex; flex-direction: column-reverse; min-width: 0; gap: 4px; overflow-wrap: anywhere; }
-.tile span { color: var(--muted); font-size: .85rem; }
-.tile b { font-weight: 500; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; }
 .field { margin-top: 16px; min-width: 0; }
 .form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 16px; }
@@ -138,41 +175,17 @@ th:last-child, td:last-child { padding-right: 0; }
 .connect-row .muted { margin-top: 5px; font-size: .85rem; }
 .connect-group { font-weight: 600; margin-top: 24px; }
 #pg-title { display: none; }
-.sidebar-collapsed { grid-template-columns: 64px minmax(0, 1fr); }
-.sidebar-collapsed .sidebar { padding: 24px 9px 18px; }
-.sidebar-collapsed .brand { padding: 0; justify-content: center; }
-.sidebar-collapsed .brand-copy, .sidebar-collapsed .identity, .sidebar-collapsed .sidebar-footer small { display: none; }
-.sidebar-collapsed .nav-item { justify-content: center; padding: 10px; min-height: 44px; }
-.sidebar-collapsed .nav-label, .sidebar-collapsed .signout-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.sidebar-collapsed .sidebar-footer { padding: 0; }
-.sidebar-collapsed #signout { padding: 10px; min-height: 44px; }
-@media (prefers-reduced-motion: no-preference) { .app-shell { transition: grid-template-columns 180ms cubic-bezier(.16, 1, .3, 1); } }
-@media (max-width: 850px) { .app-shell { grid-template-columns: 190px minmax(0, 1fr); } .sidebar-collapsed { grid-template-columns: 64px minmax(0, 1fr); } .content { padding: 24px 20px; } .main-header { padding: 14px 20px; } .form-grid { grid-template-columns: 1fr; } }
-@media (max-width: 600px) {
-  .app-shell { grid-template-columns: 112px minmax(0, 1fr); }
-  .sidebar { padding: 20px 8px 16px; gap: 20px; }
-  .brand { padding: 0 4px; }
-  .brand-copy { display: none; }
-  .identity { padding: 0 4px; }
-  .identity strong { font-size: 1rem; }
-  .identity small { font-size: .8rem; }
-  .nav-item { padding: 10px 7px; min-height: 44px; overflow-wrap: anywhere; }
-  .nav-item .icon { display: none; }
-  .sidebar-footer { padding: 0 4px; }
-  .sidebar-footer small { display: none; }
-  .main-header { padding: 14px 12px; gap: 10px; }
-  .main-header h1 { font-size: 1.15rem; }
-  .content { padding: 22px 12px; overflow-wrap: anywhere; }
-  .summary, .tiles { grid-template-columns: 1fr; gap: 16px; }
-  .summary-item { border: 0; border-bottom: 1px solid var(--border); padding: 0 0 12px; }
-  .health-banner { flex-wrap: wrap; padding: 14px; }
-  .health-banner button { margin-left: 0; }
-  .connect-row { flex-wrap: wrap; }
-  button { min-height: 44px; max-width: 100%; }
-  .sidebar-collapsed { grid-template-columns: 64px minmax(0, 1fr); }
-  .sidebar-collapsed .nav-item .icon { display: block; }
-  table { min-width: 480px; }
-  #backend-table { min-width: 350px; }
+#playground { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 18px; }
+#pg-form, .playground-response { padding: 16px 18px; }
+#pg-form > h2 { margin-bottom: 4px; }
+.playground-response pre:empty { display: none; }
+.playground-response #pg-status:empty { display: none; }
+.playground-response details { margin-top: 12px; }
+.playground-response #pg-media:empty + #pg-batch:empty { display: none; }
+.playground-response .muted { margin-top: 8px; }
+.playground-response:has(#pg-status:not(:empty), #pg-batch:not(:empty)) .response-empty { display: none; }
+@media (max-width: 700px) {
+  #playground { grid-template-columns: minmax(0, 1fr); }
 }
 /* Polish layer (same as the model-service admin pages): depth, type detail, one entrance motion, themed surfaces. */
 :root {
@@ -197,10 +210,6 @@ tbody tr { transition: background-color .12s var(--ease-out); }
 tbody tr:hover { background: color-mix(in srgb, var(--muted) 6%, transparent); }
 code { padding: 1px 5px; border-radius: 4px; background: var(--surface); }
 pre { padding: 14px 16px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); }
-.sidebar, .content { scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent; }
-/* The one authored moment: a page rises into place when the route changes. */
-.page-panel:not([hidden]) { animation: view-in .28s var(--ease-out) both; }
-@keyframes view-in { from { opacity: 0; transform: translateY(8px); } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
 }
@@ -258,7 +267,6 @@ pre { padding: 14px 16px; border-radius: var(--radius); background: var(--surfac
   <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h9m4 0h3M4 17h3m4 0h9M13 4v6M7 14v6"/></symbol>
   <symbol id="i-usage" viewBox="0 0 24 24"><path d="M4 20h16M6 16v-4m6 4V5m6 11V9"/></symbol>
   <symbol id="i-connect" viewBox="0 0 24 24"><path d="m8 8 8 8m-9-5-3 3a4 4 0 0 0 6 6l3-3M11 7l3-3a4 4 0 0 1 6 6l-3 3"/></symbol>
-  <symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18m7-13-4 4 4 4"/></symbol>
   <symbol id="i-signout" viewBox="0 0 24 24"><path d="M9 4H4v16h5m4-12 4 4-4 4m-4-4h11"/></symbol>
   <symbol id="i-health" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></symbol>
 </defs></svg>
@@ -272,32 +280,60 @@ pre { padding: 14px 16px; border-radius: var(--radius); background: var(--surfac
     <div class="row"><button class="primary" id="signin-button">Sign in</button></div>
   </form>
 </section>
-<div id="panel" class="app-shell" hidden>
-  <aside id="sidebar" class="sidebar" aria-label="Service sidebar">
-    <div class="brand"><img src="icon.png" alt=""><div class="brand-copy"><strong>Tool services</strong><small>Service administration</small></div></div>
-    <div class="identity"><strong id="title">Service admin</strong><small>MCP &amp; HTTP</small></div>
-    <nav class="navigation" aria-label="Admin pages">
-      <button type="button" class="nav-item" data-page="overview" aria-label="Overview" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg><span class="nav-label">Overview</span></button>
-      <button type="button" class="nav-item" data-page="playground" aria-label="Playground"><svg class="icon" aria-hidden="true"><use href="#i-playground"/></svg><span class="nav-label">Playground</span></button>
-      <button type="button" class="nav-item" data-page="tokens" aria-label="Access tokens"><svg class="icon" aria-hidden="true"><use href="#i-tokens"/></svg><span class="nav-label">Access tokens</span></button>
-      <button type="button" class="nav-item" data-page="backends" aria-label="Model connections"><svg class="icon" aria-hidden="true"><use href="#i-backends"/></svg><span class="nav-label">Model connections</span></button>
-      <button type="button" class="nav-item" data-page="settings" aria-label="Runtime &amp; settings"><svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg><span class="nav-label">Runtime &amp; settings</span></button>
-      <button type="button" class="nav-item" data-page="usage" aria-label="Usage"><svg class="icon" aria-hidden="true"><use href="#i-usage"/></svg><span class="nav-label">Usage</span></button>
-      <button type="button" class="nav-item" data-page="connect" aria-label="Connect &amp; API"><svg class="icon" aria-hidden="true"><use href="#i-connect"/></svg><span class="nav-label">Connect &amp; API</span></button>
-    </nav>
-    <div class="sidebar-footer"><small>Private admin session</small><button type="button" id="signout" aria-label="Sign out"><svg class="icon" aria-hidden="true"><use href="#i-signout"/></svg><span class="signout-label">Sign out</span></button></div>
-  </aside>
-  <div class="workspace">
-    <header class="main-header"><button type="button" id="sidebar-toggle" aria-controls="sidebar" aria-expanded="true" aria-label="Collapse sidebar"><svg class="icon" aria-hidden="true"><use href="#i-sidebar"/></svg><span id="sidebar-toggle-label">Collapse</span></button><h1 id="page-title">Overview</h1><span id="health-state" class="health-status" data-state="checking" role="status"><span class="status-dot"></span><span id="health-text">Checking</span></span><button type="button" id="theme">Theme: System</button></header>
-    <main id="main-content" class="content" aria-labelledby="page-title">
-      <section class="page-panel" data-panel="overview">
-        <div class="section-heading"><p class="muted">Service readiness, model connections and usage.</p><button type="button" data-go="playground">Open playground</button></div>
-        <section id="readiness" class="health-banner" data-state="checking" aria-labelledby="readiness-title"><svg class="icon" aria-hidden="true"><use href="#i-health"/></svg><div><h2 id="readiness-title">Checking service readiness</h2><p id="readiness-description">Waiting for the service health response.</p></div><button type="button" id="refresh-status">Refresh status</button></section>
-        <dl class="summary"><div class="summary-item"><dt>Model slots configured</dt><dd id="overview-slot-count">—</dd><small>Remote models only</small></div><div class="summary-item"><dt>Active caller tokens</dt><dd id="overview-token-count">—</dd><small>One token per caller</small></div><div class="summary-item"><dt>Calls since restart</dt><dd id="overview-call-count">—</dd><small>Per-user counters</small></div></dl>
-        <section aria-labelledby="status-title"><h2 id="status-title">Service details</h2><div id="tiles" class="tiles" style="margin-top:18px"></div></section>
-        <section class="section" aria-labelledby="backend-summary-title"><div class="section-heading"><h2 id="backend-summary-title">Model connections</h2><button type="button" class="small" data-go="backends">Manage connections</button></div><div class="table-wrap"><table id="backend-table"><thead><tr><th>Model slot</th><th>Connection</th><th>Configuration</th></tr></thead><tbody id="backend-summary"></tbody></table></div><p class="muted" id="backend-note" style="margin-top:14px"></p></section>
+<main id="panel" class="content" hidden>
+  <div class="service-heading">
+    <div class="service-title"><span class="service-mark"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg><img src="service-icon.png" alt=""></span>
+      <div><h1 id="title">Tool service</h1><p id="service-meta" class="muted"></p></div>
+    </div>
+    <button type="button" id="open-playground" class="primary" data-go="playground"><svg class="icon" aria-hidden="true"><use href="#i-playground"/></svg>Open Playground</button>
+  </div>
+  <nav class="navigation" aria-label="Admin pages">
+    <button type="button" class="nav-item" data-page="overview" aria-label="Overview" aria-current="page">Overview</button>
+    <button type="button" class="nav-item" data-page="playground" aria-label="Playground">Playground</button>
+    <button type="button" class="nav-item" data-page="settings" aria-label="Runtime &amp; settings">Runtime &amp; settings</button>
+    <button type="button" class="nav-item" data-page="connect" aria-label="Connections">Connections</button>
+    <button type="button" class="nav-item" data-page="backends" aria-label="Model connections">Model connections</button>
+    <button type="button" class="nav-item" data-page="tokens" aria-label="Access tokens">Access tokens</button>
+    <button type="button" class="nav-item" data-page="usage" aria-label="Usage">Usage</button>
+  </nav>
+  <div id="main-content" aria-labelledby="page-title">
+    <h2 id="page-title" class="sr-only" tabindex="-1">Overview</h2>
+    <section class="page-panel" data-panel="overview">
+      <section id="readiness" class="health-banner" data-state="checking" aria-labelledby="readiness-title">
+        <span class="health-mark"><svg class="icon" aria-hidden="true"><use href="#i-health"/></svg></span>
+        <div><h2 id="readiness-title">Checking service readiness</h2><p id="readiness-description">Waiting for the service health response.</p></div>
+        <span id="health-state" class="health-status" data-state="checking" role="status"><span class="status-dot"></span><span id="health-text">Checking</span></span>
+        <button type="button" class="small" id="refresh-status">Refresh status</button>
       </section>
-      <section class="page-panel" data-panel="playground" hidden><p class="page-description">Send a real public request the way a caller would. A temporary token is made for this session and revoked when you sign out.</p><div id="pg-models" class="pg-models" aria-label="Connected models"></div><section id="playground" aria-label="Public request playground"></section><p id="playground-empty" class="muted" hidden>No public request form is available for this service.</p></section>
+      <div class="summary overview-panel" role="group" aria-label="Service metrics">
+        <div class="summary-item" id="overview-slot-metric"><p><svg class="icon" aria-hidden="true"><use href="#i-backends"/></svg>Model connections</p><strong id="overview-slot-count">—</strong><small>Configured slots</small></div>
+        <div class="summary-item"><p><svg class="icon" aria-hidden="true"><use href="#i-usage"/></svg>Requests</p><strong id="overview-call-count">—</strong><small>Since restart</small></div>
+        <div class="summary-item"><p><svg class="icon" aria-hidden="true"><use href="#i-health"/></svg>Average latency</p><strong id="overview-latency">—</strong><small>Since restart</small></div>
+        <div class="summary-item"><p><svg class="icon" aria-hidden="true"><use href="#i-tokens"/></svg>Active tokens</p><strong id="overview-token-count">—</strong><small>Caller access</small></div>
+      </div>
+      <div class="overview-grid">
+        <section class="overview-panel" aria-labelledby="activity-title">
+          <div class="overview-heading"><div><h2 id="activity-title">Request activity</h2><p class="muted">Top requesters since restart</p></div><button type="button" class="small" data-go="usage">View usage</button></div>
+          <p id="overview-activity-empty" class="muted overview-empty">No requests recorded yet.</p>
+          <ul id="overview-activity" class="activity" hidden></ul>
+        </section>
+        <section class="overview-panel" aria-labelledby="status-title">
+          <div class="overview-heading"><div><h2 id="status-title">Service details</h2><p class="muted">Identity, endpoints and runtime status</p></div></div>
+          <dl id="tiles" class="tiles"></dl>
+        </section>
+      </div>
+      <section class="overview-panel" aria-labelledby="token-summary-title">
+        <div class="overview-heading"><div><h2 id="token-summary-title">Caller tokens</h2><p class="muted">Access status and last use</p></div><button type="button" class="small" data-go="tokens">Manage tokens</button></div>
+        <p id="overview-tokens-empty" class="muted overview-empty">No caller tokens yet.</p>
+        <div class="table-wrap" id="overview-token-table" hidden><table class="overview-table"><thead><tr><th scope="col">Caller</th><th scope="col">Status</th><th scope="col">Last used</th></tr></thead><tbody id="overview-tokens"></tbody></table></div>
+      </section>
+      <section class="overview-panel" id="overview-backends" aria-labelledby="backend-summary-title">
+        <div class="overview-heading"><h2 id="backend-summary-title">Model connections</h2><button type="button" class="small" data-go="backends">Manage connections</button></div>
+        <div class="table-wrap"><table id="backend-table" class="overview-table"><thead><tr><th scope="col">Model slot</th><th scope="col">Connection</th><th scope="col">Configuration</th></tr></thead><tbody id="backend-summary"></tbody></table></div>
+        <p class="muted overview-empty" id="backend-note">Configured slots show saved addresses. Test each connection to verify availability.</p>
+      </section>
+    </section>
+      <section class="page-panel" data-panel="playground" hidden><p id="playground-description" class="page-description">Send a real public request the way a caller would. A temporary token is made for this session and revoked when you sign out.</p><div id="pg-models" class="pg-models" aria-label="Connected models"></div><section id="playground" aria-label="Public request playground"></section><p id="playground-empty" class="muted" hidden>No public request form is available for this service.</p><p id="playground-talk" hidden><a href="../talk/">Open the live microphone client</a></p></section>
       <section class="page-panel" data-panel="tokens" hidden>
         <p class="page-description">One token per caller. Tokens protect MCP and HTTP API access; they never grant admin access.</p>
         <form id="token-form"><div class="form-grid"><div class="field"><label for="token-name">Caller name</label><input id="token-name" type="text" maxlength="64" autocomplete="off" required></div><div class="field"><label for="token-rate">Calls per minute (optional)</label><input id="token-rate" type="number" min="1" max="100000"></div><div class="field"><label for="token-days">Expires in days (optional)</label><input id="token-days" type="number" min="1" max="3650"></div></div><div class="row"><button class="primary" id="token-create">Create token</button></div></form>
@@ -305,6 +341,8 @@ pre { padding: 14px 16px; border-radius: var(--radius); background: var(--surfac
         <div class="table-wrap"><table id="token-table" hidden><thead><tr><th>Caller</th><th>Created</th><th>Last used</th><th class="num">Limit/min</th><th>Expires</th><th></th></tr></thead><tbody></tbody></table></div><p id="token-empty" class="muted" style="margin-top:24px">No tokens yet. Create one for your first caller.</p>
       </section>
       <section class="page-panel" data-panel="backends" hidden>
+        <p id="gateway-link" hidden><a href="gateways.html">Manage gateways</a></p>
+        <div id="model-slot-controls">
         <p class="page-description">Each slot is where this service sends its model work. Point a slot at a saved connection or a one-off address. Credentials stay on the service host and are never returned.</p>
         <section aria-labelledby="backends-title"><h2 id="backends-title">Model slots</h2><div id="slots" class="slots"></div></section>
         <section class="section" aria-labelledby="conn-title">
@@ -314,14 +352,18 @@ pre { padding: 14px 16px; border-radius: var(--radius); background: var(--surfac
           <p id="conns-empty" class="muted" hidden>No saved connections yet.</p>
           <div class="table-wrap"><table id="conn-table" hidden><thead><tr><th>Name</th><th>Address</th><th>Credentials</th><th>Used by</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="conns"></tbody></table></div>
         </section>
+        </div>
       </section>
       <section class="page-panel" data-panel="settings" hidden><p class="page-description">Saved values override startup defaults. Reset restores the starting value. Settings marked restart apply after the service restarts.</p><form id="form"><div id="list"></div><div class="row"><button class="primary" id="save">Save changes</button></div></form><p id="note" class="note" role="status"></p></section>
       <section class="page-panel" data-panel="usage" hidden><p class="page-description" id="usage-note">Calls and failures grouped by requester. Counters reset when the service restarts.</p><div class="table-wrap"><table id="usage" hidden><thead><tr><th>User</th><th class="num">Calls</th><th class="num">Errors</th><th class="num">Average (ms)</th><th>Last call</th></tr></thead><tbody></tbody></table></div><section class="section"><h2>Requester identity</h2><p class="muted">HTTP uses <code>X-Requester-Username</code>; MCP uses <code>_meta.requester.username</code>. This identity owns stored uploads and results.</p></section></section>
       <section class="page-panel" data-panel="connect" hidden><p class="page-description">Choose the address matching where your caller runs. Public requests use <code>X-Internal-Token</code>; HTTP also uses <code>X-Requester-Username</code>.</p><div id="connect-list" class="connect"></div><p id="connect-status" class="sr-only" role="status"></p></section>
       <p id="notice" role="status"></p>
-    </main>
   </div>
-</div>
+  <footer class="service-actions" aria-label="Session controls">
+    <button type="button" class="small" id="theme">Theme: System</button>
+    <button type="button" class="small" id="signout" hidden><svg class="icon" aria-hidden="true"><use href="#i-signout"/></svg>Sign out</button>
+  </footer>
+</main>
 <p id="error" class="error" role="alert"></p>
 
 <script src="playground.js"></script>
@@ -385,34 +427,21 @@ function name(service) {
   navigation.updateTitle();
 }
 
-/** Route pages and collapse the rail without recreating forms or their draft values. */
+const serviceIcon = document.querySelector(".service-mark img");
+function showServiceIcon() { serviceIcon.dataset.loaded = ""; }
+if (serviceIcon.complete && serviceIcon.naturalWidth) showServiceIcon();
+else serviceIcon.addEventListener("load", showServiceIcon, {once: true});
+
+/** Select service tabs while retaining open forms and their drafts. */
 class AdminNavigation {
   constructor() {
     this.service = "Tool service";
     this.buttons = [...document.querySelectorAll("[data-page]")];
     this.panels = [...document.querySelectorAll("[data-panel]")];
-    this.collapsed = false;
-    try { this.collapsed = localStorage.getItem("tool-admin-sidebar") === "collapsed"; } catch {}
-    this.setCollapsed(this.collapsed);
     for (const button of this.buttons) button.onclick = () => this.select(button.dataset.page, true);
     for (const button of document.querySelectorAll("[data-go]")) button.onclick = () => this.select(button.dataset.go, true);
-    $("sidebar-toggle").onclick = () => {
-      this.setCollapsed(!this.collapsed);
-      try { localStorage.setItem("tool-admin-sidebar", this.collapsed ? "collapsed" : "expanded"); } catch {}
-    };
     window.addEventListener("hashchange", () => this.select(location.hash.slice(1)));
     this.select(location.hash.slice(1));
-  }
-  setCollapsed(value) {
-    this.collapsed = value;
-    $("panel").classList.toggle("sidebar-collapsed", value);
-    $("sidebar-toggle").setAttribute("aria-expanded", String(!value));
-    $("sidebar-toggle").setAttribute("aria-label", value ? "Expand sidebar" : "Collapse sidebar");
-    $("sidebar-toggle-label").textContent = value ? "Expand" : "Collapse";
-    for (const button of this.buttons) {
-      if (value) button.title = button.getAttribute("aria-label");
-      else button.removeAttribute("title");
-    }
   }
   select(requested, focus = false) {
     this.page = this.buttons.some(button => button.dataset.page === requested) ? requested : "overview";
@@ -427,9 +456,7 @@ class AdminNavigation {
       else history.replaceState(null, "", "#" + this.page);
     }
     if (focus) {
-      const title = $("page-title");
-      title.tabIndex = -1;
-      title.focus({preventScroll: true});
+      $("page-title").focus({preventScroll: true});
       window.scrollTo({top: 0});
     }
   }
@@ -437,6 +464,7 @@ class AdminNavigation {
     const label = this.buttons.find(button => button.dataset.page === this.page).getAttribute("aria-label");
     $("page-title").textContent = label;
     document.title = label + " · " + this.service + " admin";
+    $("open-playground").hidden = !this.playgroundAvailable || this.page === "playground";
   }
 }
 const navigation = new AdminNavigation();
@@ -492,7 +520,26 @@ function showOverview() {
     el("td", {textContent: slot.label}), el("td", {textContent: slot.connection || slot.url || "Not connected"}),
     el("td", {textContent: slot.url || slot.connection ? "Configured" : "Not configured"}))));
   renderPlaygroundModels();
-  $("backend-note").textContent = "Configured slots report saved addresses, not verified backend availability. Readiness follows the service’s health check.";
+  $("overview-slot-metric").hidden = latestBackends.length === 0;
+  $("overview-backends").hidden = latestBackends.length === 0;
+}
+
+function showActivity(users) {
+  const busiest = users.filter(row => row.calls > 0).sort((a, b) => b.calls - a.calls).slice(0, 5);
+  $("overview-activity-empty").hidden = busiest.length > 0;
+  $("overview-activity").hidden = busiest.length === 0;
+  if (!busiest.length) {
+    $("overview-activity").replaceChildren();
+    return;
+  }
+  const max = busiest[0].calls;
+  $("overview-activity").replaceChildren(...busiest.map(row => {
+    const label = el("span", {className: "activity-label"},
+      el("span", {textContent: row.user}), el("strong", {textContent: row.calls.toLocaleString()}));
+    const meter = el("meter", {min: 0, max, value: row.calls});
+    meter.setAttribute("aria-hidden", "true");
+    return el("li", {}, label, meter);
+  }));
 }
 
 /* Playground: show the models this service is connected to, and fill choices once a token is entered */
@@ -647,6 +694,15 @@ function mountPlaygroundTools() {
 }
 function watchPlayground() {
   mountPlaygroundTools(); syncTools();
+  const form = $("pg-form");
+  form.classList.add("overview-panel");
+  form.prepend(el("h2", {textContent: "Request"}));
+  const response = el("section", {className: "overview-panel playground-response"},
+    el("h2", {textContent: "Response"}),
+    el("p", {className: "muted response-empty", textContent: "Send a request to see the result."}),
+    $("pg-status"), $("pg-output"), $("pg-media"), $("pg-batch"),
+    $("playground").querySelector("details"));
+  $("playground").append(response);
   const field = $("pg-token").closest(".pg-field");
   field.hidden = true; if (field.nextElementSibling?.classList.contains("description")) field.nextElementSibling.hidden = true;
   const reset = playground.reset.bind(playground);
@@ -718,13 +774,29 @@ function renderConnect(c) {
 function showStatus(data) {
   latestStatus = data;
   renderConnect(data.connect);
-  if (!playground && data.playground) { playground = Playground.mount($("playground"), data.playground, {secrets: () => [password]}); watchPlayground(); renderPlaygroundModels(); }
-  $("playground-empty").hidden = Boolean(data.playground);
+  const hasOperations = Boolean(data.playground?.operations?.length);
+  if (!playground && hasOperations) { playground = Playground.mount($("playground"), data.playground, {secrets: () => [password]}); watchPlayground(); renderPlaygroundModels(); }
+  const hasLiveClient = data.service === "Converse";
+  $("playground-description").hidden = !hasOperations;
+  $("playground-empty").hidden = hasOperations || hasLiveClient;
+  $("playground-talk").hidden = !hasLiveClient;
+  navigation.playgroundAvailable = hasOperations || hasLiveClient;
   name(data.service);
   const u = data.usage;
-  const tiles = [...data.items, {label: "Running for", value: duration(u.uptime_s)}, {label: "Calls", value: String(u.calls)},
-    {label: "Errors", value: String(u.errors)}, {label: "Average call (ms)", value: String(u.avg_ms)}];
-  $("tiles").replaceChildren(...tiles.map(t => el("div", {className: "tile"}, el("b", {textContent: t.value}), el("span", {textContent: t.label}))));
+  const routes = data.connect?.paths ?? [];
+  const hasGatewayPage = routes.some(route => route.path === "/admin/gateways.html");
+  $("gateway-link").hidden = !hasGatewayPage;
+  $("model-slot-controls").hidden = hasGatewayPage;
+  const operation = data.playground?.operations?.[0];
+  const endpoint = operation ?? routes.find(route => route.method === "WS" || route.path.startsWith("/api/"));
+  $("service-meta").textContent = [endpoint?.label, data.connect && (":" + data.connect.port)].filter(Boolean).join(" · ");
+  const tiles = [{label: "Service", value: data.service}];
+  if (endpoint) tiles.push({label: "Endpoint", value: endpoint.method + " " + (endpoint.route ?? endpoint.path)});
+  tiles.push(...data.items, {label: "Uptime", value: duration(u.uptime_s)}, {label: "Errors", value: String(u.errors)});
+  $("tiles").replaceChildren(...tiles.map(({label, value}) => el("div", {className: "tile"},
+    el("dt", {textContent: label}), el("dd", {textContent: value}))));
+  $("overview-latency").textContent = u.calls ? Number(u.avg_ms).toLocaleString() + " ms" : "—";
+  showActivity(u.users);
   const body = $("usage").tBodies[0];
   body.replaceChildren(...u.users.map(row => {
     const tr = el("tr");
@@ -744,6 +816,13 @@ function forgetToken() { $("fresh-token").textContent = ""; $("fresh").hidden = 
 function showTokens(list) {
   tokenCount = list.filter(row => !row.expires || row.expires > Date.now() / 1000).length;
   showOverview();
+  const recent = [...list].sort((left, right) => (right.last_used ?? 0) - (left.last_used ?? 0)).slice(0, 5);
+  $("overview-tokens-empty").hidden = recent.length > 0;
+  $("overview-token-table").hidden = recent.length === 0;
+  $("overview-tokens").replaceChildren(...recent.map(row => el("tr", {},
+    el("td", {textContent: row.name}),
+    el("td", {textContent: row.expires && row.expires <= Date.now() / 1000 ? "Expired" : "Active"}),
+    el("td", {textContent: row.last_used ? ago(row.last_used) : "Never"}))));
   $("token-table").hidden = !list.length; $("token-empty").hidden = list.length > 0;
   $("token-table").tBodies[0].replaceChildren(...list.map(row => {
     const revoke = el("button", {type: "button", className: "small", textContent: "Revoke"});
@@ -1056,6 +1135,7 @@ function closeSession() {
   $("panel").hidden = true; $("signout").hidden = true; $("signin").hidden = false;
   $("list").replaceChildren(); $("slots").replaceChildren(); $("conns").replaceChildren(); $("tiles").replaceChildren(); $("token-table").tBodies[0].replaceChildren();
   $("usage").tBodies[0].replaceChildren(); $("backend-summary").replaceChildren();
+  $("overview-activity").replaceChildren(); $("overview-tokens").replaceChildren();
   $("token-form").reset(); clearConnectionForm();
   for (const field of document.querySelectorAll('input[type="password"]')) field.value = "";
   $("notice").textContent = $("note").textContent = "";

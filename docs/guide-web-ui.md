@@ -4,17 +4,17 @@ With the service's admin password configured, open `http://127.0.0.1:29401/admin
 
 ## Navigation
 
-The sidebar opens seven pages. The URL hash links directly to a page; browser Back and Forward work between them. Collapse the sidebar to keep an icon rail. Choose **System**, **Light** or **Dark** in the theme control. Theme and sidebar preferences are stored only in this browser; narrow screens keep the rail visible.
+Use the tabs below the service name to open each admin page. The URL hash links directly to a tab, and browser Back and Forward work between tabs. Use the theme control at the bottom of the page to choose **System**, **Light** or **Dark**.
 
 | Page | What it does |
 |---|---|
-| Overview (`#overview`) | Service-specific status and live `GET /health` results, including liveness and readiness |
+| Overview (`#overview`) | Live service readiness, request counts by requester since restart, service details and caller tokens |
 | Playground (`#playground`) | Real public API requests with a caller token and requester username |
 | Access tokens (`#tokens`) | Create and revoke caller tokens |
 | Model connections (`#backends`) | Test and save model slots and named connections |
 | Runtime & settings (`#settings`) | Edit saved options and reset them to their environment defaults |
 | Usage (`#usage`) | Calls, errors and average time per requester since this process started |
-| Connect & API (`#connect`) | Caller addresses, routes and Copy buttons |
+| Connections (`#connect`) | Caller addresses, routes and Copy buttons |
 
 ## Model connections
 
@@ -32,9 +32,9 @@ Saved settings override environment defaults. **Reset** removes an option's save
 
 **Access tokens** makes one token per caller (Armory, another service). Enter a name, optionally a calls-per-minute limit and an expiry in days, and press **Create token**. The token is shown once: copy it into the caller's configuration (for Armory, the extension's `X-Internal-Token` header). **Revoke** cuts a caller off at once. Tokens are stored as hashes in `tokens.json` beside `settings.json`. With no token, every call to `/mcp` and `/api/*` is refused; `/health` and `/admin` need none.
 
-## Connect & API
+## Connections
 
-**Connect & API** lists the addresses other services can use: the address you opened the page with, the same PC (`127.0.0.1`), another Docker container on the same network, and a Docker container calling this PC (`host.docker.internal`), then every endpoint with its method and a **Copy** button. Calls need a token from **Access tokens** in `X-Internal-Token`; HTTP routes also need `X-Requester-Username`.
+**Connections** lists the addresses other services can use: the address you opened the page with, the same PC (`127.0.0.1`), another Docker container on the same network, and a Docker container calling this PC (`host.docker.internal`), then every endpoint with its method and a **Copy** button. Calls need a token from **Access tokens** in `X-Internal-Token`; HTTP routes also need `X-Requester-Username`.
 
 ## Try it: send a real request
 
