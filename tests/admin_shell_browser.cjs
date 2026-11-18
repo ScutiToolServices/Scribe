@@ -44,18 +44,33 @@ class BrowserPage {
 async function run() {
   const source = path.resolve(__dirname,'../web');
   const html = await fs.readFile(path.join(source,'index.html'));
+  assert.doesNotMatch(html.toString(), /id="sidebar"|class="main-header"/, 'The service workspace has no global chrome');
   const script = await fs.readFile(path.join(source,'playground.js'));
   const icon = await fs.readFile(path.join(source,'icon.png'));
   const requests=[];
   let unauthorized=false, holdStatus=false, health='ready', pendingStatus=[];
   let tokenRows=[], settingValue=4;
-  const slotKeys={Bard:['piper','paradee'],Scribe:['whisper'],Reader:['ocr'],Lens:['ocr'],Mimic:['kitten2','audio8']};
+  const slotKeys={Bard:['piper','paradee'],Scribe:['whisper'],Reader:['ocr'],Lens:['ocr'],
+    Converse:['stt','cnv','tts'],DecisionGateway:[],ConversationGateway:[],Mimic:['kitten2','audio8']};
+  const ports={Bard:29400,Scribe:29401,Reader:29402,Lens:29403,Mimic:29404,Converse:29405,DecisionGateway:29406,ConversationGateway:29407};
   const backendData=()=>({service:fixture.service,connections:[],backends:slotKeys[fixture.service].map(key=>({key,label:'Model '+key,help:'Synthetic backend',local:false,mode:'remote',url:'',token_set:false,admin:fixture.service==='Mimic'?'Model admin password':null,source:'default',example:'http://model.invalid'}))});
   const settingsData=()=>({settings:[{key:'capacity',kind:'int',value:settingValue,label:'Capacity',help:'Fixture setting',source:'default',minimum:1,maximum:100}]});
   const fixture = {
-    service:'Bard', items:[], usage:{uptime_s:120,calls:17,errors:2,avg_ms:42,users:[]},
+    service:'Bard', items:[], usage:{uptime_s:120,calls:17,errors:2,avg_ms:42,users:[
+      {user:'Fixture reader',calls:12,errors:2,avg_ms:40,last_at:1700000000},
+      {user:'Fixture client',calls:5,errors:0,avg_ms:47,last_at:1700000000}
+    ]},
     connect:{host:'bard',port:29400,paths:[{label:'MCP',method:'POST',path:'/mcp'}]},
     playground:{service:'bard',operations:[{label:'Speak',method:'POST',route:'/api/speak',fields:[{key:'text',label:'Text',type:'textarea'}]}]}
+  };
+  const statusData=()=>{
+    const gateway=fixture.service.endsWith('Gateway'), live=fixture.service==='Converse';
+    const connect={...fixture.connect,host:fixture.service.toLowerCase(),port:ports[fixture.service]};
+    if(!gateway&&!live)return {...fixture,connect};
+    const endpoint=gateway
+      ? {label:'Gateways admin page',method:'GET',path:'/admin/gateways.html'}
+      : {label:'Live conversation',method:'WS',path:'/api/converse'};
+    return {...fixture,playground:null,connect:{...connect,paths:[endpoint]}};
   };
   const server=http.createServer(async(req,res)=>{
     const chunks=[];for await(const chunk of req)chunks.push(chunk);
@@ -65,10 +80,10 @@ async function run() {
     res.setHeader('Content-Type','application/json');
     if(req.url==='/admin/'){res.setHeader('Content-Type','text/html');res.end(html);return;}
     if(req.url==='/admin/playground.js'){res.setHeader('Content-Type','text/javascript');res.end(script);return;}
-    if(req.url==='/admin/icon.png'){res.setHeader('Content-Type','image/png');res.end(icon);return;}
+    if(req.url==='/admin/icon.png'||req.url==='/admin/service-icon.png'){res.setHeader('Content-Type','image/png');res.end(icon);return;}
     if(req.url==='/api/speak'){res.end(JSON.stringify({message:'Fixture request completed'}));return;}
     if(req.url.startsWith('/admin/')&&unauthorized){res.statusCode=401;res.end(JSON.stringify({detail:'Fixture session expired'}));return;}
-    if(req.url==='/admin/status'){if(holdStatus)pendingStatus.push(()=>res.end(JSON.stringify(fixture)));else res.end(JSON.stringify(fixture));return;}
+    if(req.url==='/admin/status'){if(holdStatus)pendingStatus.push(()=>res.end(JSON.stringify(statusData())));else res.end(JSON.stringify(statusData()));return;}
     if(req.url==='/admin/backends'||req.url.startsWith('/admin/connections/')){res.end(JSON.stringify(backendData()));return;}
     if(req.url.startsWith('/admin/backends/')){res.end(JSON.stringify(req.url.endsWith('/test')?{ok:true,message:'Fixture connection works'}:backendData()));return;}
     if(req.url==='/admin/settings'){if(req.method==='PUT')settingValue=JSON.parse(body).values.capacity;res.end(JSON.stringify(settingsData()));return;}
@@ -116,24 +131,33 @@ async function run() {
       if(service!=='Bard'){await page.evaluate(()=>document.getElementById('signout').click());await navigate();await login();}
       await page.until(()=>document.getElementById('health-state')?.textContent.trim()==='Ready','Health should report Ready');
       assert.equal(await page.evaluate(()=>document.getElementById('overview-call-count').textContent.trim()),'17','Overview uses actual call count');
+      assert.equal(await page.evaluate(()=>document.querySelector('#panel h1').textContent),service);
+      assert.match(await page.evaluate(()=>document.getElementById('overview-activity').textContent),/Fixture reader\s*12/);
       assert.equal(await page.evaluate(()=>document.querySelectorAll('#backend-summary tr').length),slotKeys[service].length,'Overview lists every actual backend');
       for(const id of ['overview','playground','tokens','backends','settings','usage','connect']){
         await select(id);
         const state=await page.evaluate(()=>({pages:[...document.querySelectorAll('[data-panel]')].filter(p=>!p.hidden).map(p=>p.dataset.panel),headings:document.querySelectorAll('#panel h1').length,title:document.getElementById('page-title').textContent,active:document.querySelector('[aria-current="page"]').dataset.page,hash:location.hash}));
         assert.deepEqual(state.pages,[id],service+' one active page');assert.equal(state.headings,1);assert.ok(state.title.trim(),'Page title is populated');assert.equal(state.active,id);assert.equal(state.hash,'#'+id);
       }
-      await select('playground');
-      await page.evaluate(()=>{document.getElementById('pg-token').value='illustrative-caller';document.querySelector('#playground textarea').value='Keep this draft';});
-      await select('settings');await page.evaluate(()=>{document.getElementById('s-capacity').value='9';});
-      await select('backends');await page.evaluate(()=>{document.getElementById('conn-name').value='Draft connection';});
-      await select('tokens');await page.evaluate(()=>{document.getElementById('token-name').value='Draft caller';});
-      for(const id of ['playground','settings','backends','tokens'])await select(id);
-      assert.deepEqual(await page.evaluate(()=>[document.querySelector('#playground textarea').value,document.getElementById('s-capacity').value,document.getElementById('conn-name').value,document.getElementById('token-name').value]),['Keep this draft','9','Draft connection','Draft caller']);
-      const expanded=await page.evaluate(()=>{const b=document.getElementById('sidebar-toggle');b.focus();return b.getAttribute('aria-expanded');});
+      if(statusData().playground){
+        await select('playground');
+        await page.evaluate(()=>{document.getElementById('pg-token').value='illustrative-caller';document.querySelector('#playground textarea').value='Keep this draft';});
+        await select('settings');await page.evaluate(()=>{document.getElementById('s-capacity').value='9';});
+        await select('backends');await page.evaluate(()=>{document.getElementById('conn-name').value='Draft connection';});
+        await select('tokens');await page.evaluate(()=>{document.getElementById('token-name').value='Draft caller';});
+        for(const id of ['playground','settings','backends','tokens'])await select(id);
+        assert.deepEqual(await page.evaluate(()=>[document.querySelector('#playground textarea').value,document.getElementById('s-capacity').value,document.getElementById('conn-name').value,document.getElementById('token-name').value]),['Keep this draft','9','Draft connection','Draft caller']);
+      }else if(service==='Converse'){
+        await select('playground');
+        assert.equal(await page.evaluate(()=>document.querySelector('#playground-talk a').getAttribute('href')),'../talk/');
+      }else{
+        await select('backends');
+        assert.equal(await page.evaluate(()=>!document.getElementById('gateway-link').hidden&&document.getElementById('model-slot-controls').hidden),true);
+      }
+      await page.evaluate(()=>document.querySelector('[data-page="overview"]').focus());
       await page.call('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',text:'\r',unmodifiedText:'\r',windowsVirtualKeyCode:13});
       await page.call('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
-      assert.notEqual(await page.evaluate(()=>document.getElementById('sidebar-toggle').getAttribute('aria-expanded')),expanded,'Keyboard collapses sidebar');
-      assert.equal(await page.evaluate(()=>document.getElementById('panel').classList.contains('sidebar-collapsed')),expanded==='true');
+      assert.equal(await page.evaluate(()=>location.hash),'#overview','Keyboard opens the Overview tab');
       for(const width of [320,375,540,768,1024]){
         await page.call('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});
         for(const id of ['overview','playground','tokens','backends','settings','usage','connect']){
@@ -150,10 +174,9 @@ async function run() {
     assert.equal(publicRequest.token,'illustrative-caller');assert.equal(publicRequest.password,undefined,'Public API must not receive admin credentials');
     await page.evaluate(()=>{location.hash='settings';});
     await page.until(()=>!document.querySelector('[data-panel="settings"]').hidden,'Hash navigation did not open settings');
-    const collapsed=await page.evaluate(()=>document.getElementById('panel').classList.contains('sidebar-collapsed'));
-    await navigate();
-    await page.until(()=>!document.getElementById('panel').hidden,'Remembered session did not reopen');
-    assert.equal(await page.evaluate(()=>document.getElementById('panel').classList.contains('sidebar-collapsed')),collapsed,'Sidebar preference persists across reload');
+    await page.call('Page.reload');
+    await page.until(()=>document.getElementById('panel')?.hidden===false,'Remembered session did not reopen');
+    assert.equal(await page.evaluate(()=>location.hash),'#settings','Page hash persists across reload');
     await select('settings');await page.evaluate(()=>{document.getElementById('s-capacity').value='8';document.getElementById('form').requestSubmit();});
     assert.deepEqual(await expectRequest('PUT','/admin/settings'),{values:{capacity:8}});
     await page.until(()=>!document.getElementById('save').disabled,'Settings mutation did not finish');
@@ -179,34 +202,36 @@ async function run() {
       await fs.mkdir(screenshotDirectory,{recursive:true});
       const capture=async(filename)=>{
         await page.evaluate(()=>document.activeElement?.blur());
-        await delay(220); // Let the sidebar's 180 ms layout transition settle before capture.
         const mobile=filename.includes('mobile');
         const shot=await page.call('Page.captureScreenshot',mobile?{captureBeyondViewport:false,clip:{x:0,y:0,width:375,height:900,scale:1}}:{captureBeyondViewport:true});
         await fs.writeFile(path.join(screenshotDirectory,filename),Buffer.from(shot.data,'base64'));
       };
       await page.call('Emulation.setDeviceMetricsOverride',{width:1080,height:1000,deviceScaleFactor:1,mobile:false});
-      await page.evaluate(()=>{const toggle=document.getElementById('sidebar-toggle');if(toggle.getAttribute('aria-expanded')==='false')toggle.click();});
       await select('overview');await capture('tool-overview-desktop.png');
       await page.call('Emulation.setDeviceMetricsOverride',{width:375,height:900,deviceScaleFactor:1,mobile:false});
-      await page.evaluate(()=>{const toggle=document.getElementById('sidebar-toggle');if(toggle.getAttribute('aria-expanded')==='true')toggle.click();});
-      await capture('tool-overview-mobile-collapsed.png');
-      await page.evaluate(()=>document.getElementById('sidebar-toggle').click());
-      await capture('tool-overview-mobile-expanded.png');
+      await capture('tool-overview-mobile.png');
       await page.call('Emulation.setDeviceMetricsOverride',{width:1080,height:1000,deviceScaleFactor:1,mobile:false});
       await select('backends');await page.evaluate(()=>{document.documentElement.style.colorScheme='dark';});
       await capture('tool-connections-dark.png');
     }
+    const tokenMutationStart=requests.length;
     await select('tokens');await page.evaluate(()=>{document.getElementById('token-name').value='Fixture caller';document.getElementById('token-form').requestSubmit();});
-    assert.equal((await expectRequest('POST','/admin/tokens')).name,'Fixture caller');
+    assert.equal((await expectRequest('POST','/admin/tokens',tokenMutationStart)).name,'Fixture caller');
     await page.until(()=>document.getElementById('fresh-token').textContent==='illustrative-public-token','New token not shown');
     await select('backends');await page.evaluate(()=>{document.getElementById('conn-name').value='Fixture connection';document.getElementById('conn-url').value='http://fixture.invalid';document.getElementById('conn-token').value='illustrative-model';document.getElementById('conn-admin').value='illustrative-model-admin';document.getElementById('conn-form').requestSubmit();});
     assert.deepEqual(await expectRequest('PUT','/admin/connections/Fixture%20connection'),{url:'http://fixture.invalid',token:'illustrative-model',admin_password:'illustrative-model-admin'});
-    await page.evaluate(()=>{document.getElementById('slot-kitten2-url').value='http://fixture.invalid';document.querySelector('#slots .slot button').click();});
+    await page.until(()=>!document.getElementById('conn-save').disabled,'Connection save did not finish');
+    await page.evaluate(()=>{
+      const editor=document.getElementById('slot-kitten2-edit');
+      document.querySelector('[aria-controls="slot-kitten2-edit"]').click();
+      document.getElementById('slot-kitten2-url').value='http://fixture.invalid';
+      editor.querySelector('button.primary').click();
+    });
     assert.equal((await expectRequest('PUT','/admin/backends/kitten2')).url,'http://fixture.invalid');
     await page.evaluate(()=>{document.getElementById('conn-token').value='illustrative-unsaved-model';document.getElementById('conn-admin').value='illustrative-unsaved-admin';document.getElementById('signout').click();});
     assert.deepEqual(await page.evaluate(()=>[document.getElementById('pg-token').value,document.getElementById('fresh-token').textContent,sessionStorage.getItem('admin')]),['','',null],'Signout clears credentials');
     assert.equal(await page.evaluate(()=>[...document.querySelectorAll('input[type="password"]')].every(input=>input.value==='')),true,'Signout clears unsaved credential fields');
-    assert.equal(await page.evaluate(()=>JSON.stringify(Object.values(localStorage)).includes('illustrative')),false,'Sidebar storage contains no credentials');
+    assert.equal(await page.evaluate(()=>JSON.stringify(Object.values(localStorage)).includes('illustrative')),false,'Browser preferences contain no credentials');
     for(const value of ['missing','error']){
       health=value;await navigate();await login();
       const expected=value==='error'?'Unavailable':'Not ready';
@@ -227,7 +252,7 @@ async function run() {
     holdStatus=false;pendingStatus.splice(0).forEach(release=>release());await delay(250);
     assert.equal(await page.evaluate(()=>document.getElementById('panel').hidden),true,'Pending login must not resurrect signout');
     assert.equal(await page.evaluate(()=>sessionStorage.getItem('admin')),null);
-    console.log('Admin shell browser checks passed: five service descriptors, seven pages, responsive layout, drafts, live mutations, BFCache restore, readiness, 401 and signout race');
+    console.log('Admin browser checks passed: eight descriptors, seven pages, responsive layout, drafts, live mutations, BFCache restore, readiness, 401 and signout race');
   } finally {
     socket?.close();
     if(chrome && chrome.exitCode===null){chrome.kill();await new Promise(resolve=>{chrome.once('exit',resolve);setTimeout(resolve,2000);});}
