@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Neutral dark theme
+
+The admin page's dark theme uses the neutral dark palette with the orange accent again, in place of the blue-navy one from the tabbed redesign. The light theme is unchanged.
+
 ### Service workspace
 
 Admin now opens to a full-width Overview with live readiness, request activity by requester, service details and caller tokens. Use the tabs below the service name for Playground, settings, connections and access management.
