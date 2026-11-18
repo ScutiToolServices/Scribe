@@ -1,6 +1,6 @@
 # Scribe speech-to-text MCP server.
-# Start:  docker compose up -d --build        (armory reaches it at http://scribe:8091/mcp)
-# Needs a .env next to this file with INTERNAL_API_TOKEN (same value as Citadel's); see .env.example.
+# Start:  docker compose up -d --build        (armory reaches it at http://scribe:29401/mcp)
+# Needs a .env next to this file with SERVICE_ADMIN_PASSWORD; create the callers' tokens on /admin/. See .env.example.
 
 name: scribe
 
@@ -9,30 +9,29 @@ services:
     build: .
     restart: unless-stopped
     environment:
-      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?set INTERNAL_API_TOKEN in .env}
-      SCRIBE_MODEL: ${SCRIBE_MODEL:-base.en}
-      SCRIBE_ADMIN_PASSWORD: ${SCRIBE_ADMIN_PASSWORD:-}
-      SCRIBE_MAX_SECONDS: ${SCRIBE_MAX_SECONDS:-150}
-      SCRIBE_STREAM_CAPACITY: ${SCRIBE_STREAM_CAPACITY:-2}
-      SCRIBE_STREAM_MAX_FRAME_BYTES: ${SCRIBE_STREAM_MAX_FRAME_BYTES:-64000}
-      SCRIBE_STREAM_IDLE_S: ${SCRIBE_STREAM_IDLE_S:-15}
-      SCRIBE_STREAM_WINDOW_S: ${SCRIBE_STREAM_WINDOW_S:-30}
+      SERVICE_MODEL: ${SERVICE_MODEL:-base.en}
+      SERVICE_ADMIN_PASSWORD: ${SERVICE_ADMIN_PASSWORD:?set SERVICE_ADMIN_PASSWORD in .env (it unlocks the token page)}
+      SERVICE_MAX_SECONDS: ${SERVICE_MAX_SECONDS:-150}
+      SERVICE_STREAM_CAPACITY: ${SERVICE_STREAM_CAPACITY:-2}
+      SERVICE_STREAM_MAX_FRAME_BYTES: ${SERVICE_STREAM_MAX_FRAME_BYTES:-64000}
+      SERVICE_STREAM_IDLE_S: ${SERVICE_STREAM_IDLE_S:-15}
+      SERVICE_STREAM_WINDOW_S: ${SERVICE_STREAM_WINDOW_S:-30}
     ports:
-      - "${SCRIBE_BIND:-0.0.0.0}:${SCRIBE_PORT:-8091}:8091"
+      - "${SERVICE_BIND:-0.0.0.0}:${SERVICE_PORT:-29401}:29401"
     volumes:
       - scribe_data:/data
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:29401/health')"]
       interval: 15s
       timeout: 5s
-      start_period: 120s
+      start_period: 30s
     networks: [citadel]
 
 volumes:
   scribe_data:
 
 networks:
-  # Join the Citadel stack's network so armory/ember_api can reach http://scribe:8091. Start the Citadel stack first:
+  # Join the Citadel stack's network so armory/ember_api can reach http://scribe:29401. Start the Citadel stack first:
   # it creates this network.
   citadel:
     name: citadel_core

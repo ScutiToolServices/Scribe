@@ -9,9 +9,12 @@ dependencies = [
     "uvicorn==0.49.0",
     "websockets>=13.0",
     "python-dotenv==1.2.2",
-    "faster-whisper>=1.1",
     "httpx>=0.27",
 ]
+
+[project.optional-dependencies]
+# main-voice gate (src/voicegate.py); `uv sync --extra voice`
+voice = ["numpy>=1.26", "onnxruntime>=1.18"]
 
 [dependency-groups]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]

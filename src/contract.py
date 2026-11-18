@@ -17,4 +17,6 @@ class TranscribeResult(BaseModel):
     language: str
     segments: list[SegmentOut] | None = None
     cached: bool
+    cleaned: bool = False  # text went through the S1Mini cleanup; segments stay as transcribed
+    voice_gate: bool = False  # the main-voice gate silenced other voices before transcribing
     message: str
