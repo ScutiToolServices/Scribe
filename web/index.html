@@ -327,6 +327,17 @@ pre { padding: 14px 16px; border-radius: var(--radius); background: var(--surfac
 <script src="playground.js"></script>
 <script>
 const $ = id => document.getElementById(id);
+/* Copy text. Falls back to a hidden textarea when the clipboard API is missing or refused (plain http, framed page). */
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch {}
+  const box = document.createElement("textarea");
+  box.value = text; box.className = "sr-only"; box.setAttribute("aria-label", "Text to copy");
+  document.body.append(box); box.select();
+  let copied = false;
+  try { copied = document.execCommand("copy"); } catch {}
+  box.remove();
+  return copied;
+}
 let password = "", rows = [], noteTimer, refreshTimer, playground;
 let session = new AbortController(), sessionVersion = 0, refreshing = false;
 let latestStatus = null, latestBackends = [], tokenCount = 0, healthVersion = 0;
@@ -677,7 +688,7 @@ function connectRow(label, url, note) {
   button.setAttribute("aria-label", "Copy " + url);
   button.onclick = async () => {
     let copied = false;
-    try { await navigator.clipboard.writeText(url); copied = true; } catch {}
+    copied = await copyText(url);
     button.textContent = copied ? "Copied" : "Copy failed";
     $("connect-status").textContent = copied ? "Copied " + url : "Copy failed. Select the address and copy it manually.";
     setTimeout(() => { button.textContent = "Copy"; }, 2000);
@@ -767,7 +778,7 @@ $("token-form").onsubmit = async event => {
 $("fresh-copy").onclick = async () => {
   const text = $("fresh-token").textContent;
   let copied = false;
-  try { await navigator.clipboard.writeText(text); copied = true; } catch {}
+  copied = await copyText(text);
   $("fresh-copy").textContent = copied ? "Copied" : "Copy failed";
   $("token-status").textContent = copied ? "Token copied." : "Copy failed. Select the token and copy it manually.";
   setTimeout(() => { $("fresh-copy").textContent = "Copy"; }, 2000);

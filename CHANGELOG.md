@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Copy works on plain http and inside a frame
+
+The Copy buttons for a new token and for the addresses now fall back to a hidden text box when the browser refuses the clipboard API (plain http pages, framed pages such as ServiceHub). It is the same fallback the model services already had.
+
 ### Main-voice gate on or off per request
 
 `tool_scribe_transcribe` takes `voice_gate`, and `POST /api/transcribe`, `POST /api/transcribe-partial` and `WS /api/stream` take `?voice_gate=true|false`. Omitted follows the service setting. The result carries `voice_gate` (whether the gate ran); forcing it on with no voice set up runs without it and says so in `message`. Gated and plain transcripts are cached apart.
