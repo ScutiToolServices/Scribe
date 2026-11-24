@@ -22,7 +22,7 @@ Open **Model connections**, choose a saved connection or **Another address**, en
 
 Named connections can be reused by slots. Editing one updates the slots that use it; a connection in use cannot be deleted. **Disconnect slot** clears its saved connection. These remote-only services need a connection before inference works.
 
-The Speech to text slot calls STT_Whisper_Model. Keep the runtime model option equal to the remote model because it keys the transcript cache. Overview reports the model and where transcription runs.
+The Speech to text slot calls STT_Whisper_Model; the Moonshine slot calls STT_Moonshine_Model, used when the Speech engine option is `moonshine` (English only, no word timestamps, so long live dictation ends with an error at the window bound). Keep the runtime model option equal to the remote model because it keys the transcript cache. Overview reports the model and where transcription runs.
 
 ## Runtime & settings and Usage
 

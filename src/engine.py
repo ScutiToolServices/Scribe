@@ -119,6 +119,16 @@ async def probe_whisper(url: str, token: str) -> str:
         raise ProbeError("That address is not a STT_Whisper_Model service.") from None
 
 
+async def probe_moonshine(url: str, token: str) -> str:
+    """The admin page's Test button for a STT_Moonshine_Model address (same /v1/transcribe shape as Whisper's)."""
+    try:
+        return await probe_whisper(url, token)
+    except ProbeError as error:
+        if "STT_Whisper_Model" in str(error):
+            raise ProbeError("That address is not a STT_Moonshine_Model service.") from None
+        raise
+
+
 STYLINGS = ("casual", "semi-casual", "semi-formal", "formal")  # the STC_S1Mini_Model control values
 STRUCTURES = ("prose", "lists")
 CONTEXTS = ("general", "email")
@@ -180,10 +190,10 @@ class RoutedEngine:
     `model_name` is Scribe's configured name, so it must match the model the service runs; cached transcripts are keyed
     by it."""
 
-    def __init__(self, decoder: Decoder, model_name: str, slot: Callable[[], tuple[str, str] | None],
+    def __init__(self, decoder: Decoder, model_name: str | Callable[[], str], slot: Callable[[], tuple[str, str] | None],
                  timeout_s: float | Callable[[], float] = 115,
                  prefilter: Callable[[bool | None], Callable[[bytes], bytes] | None] | None = None) -> None:
-        self._decoder, self._model_name, self._slot, self._timeout_s = decoder, model_name, slot, as_getter(timeout_s)
+        self._decoder, self._model_name, self._slot, self._timeout_s = decoder, as_getter(model_name), slot, as_getter(timeout_s)
         # Called per request with True/False (the caller's choice) or None (follow the setting). It returns the filter, or
         # None when the gate is off or not set up (no voiceprint enrolled, extra not installed).
         self._prefilter = prefilter or (lambda force=None: None)
@@ -197,7 +207,8 @@ class RoutedEngine:
     def name_for(self, voice_gate: bool | None = None) -> str:
         """The transcript cache key: gated transcripts differ from plain ones, so the gate's tag joins the name."""
         tag = getattr(self._filter(voice_gate), "tag", "")
-        return f"{self._model_name}+{tag}" if tag else self._model_name
+        name = self._model_name()
+        return f"{name}+{tag}" if tag else name
 
     @property
     def model_name(self) -> str:

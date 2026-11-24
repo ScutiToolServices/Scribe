@@ -19,10 +19,10 @@ from starlette.staticfiles import StaticFiles
 from starlette.websockets import WebSocket
 from starlette.routing import Mount, WebSocketRoute
 
-from src.config import PROJECT_DIR, Settings
+from src.config import PROJECT_DIR, Settings, chosen_engine
 from src.contract import TranscribeResult
 from src.admin_api import Backends, Slot, Usage, register
-from src.engine import CONTEXTS, STRUCTURES, STYLINGS, Cleaner, Cleanup, Decoder, RoutedEngine, SttEngine, probe_s1mini, probe_whisper
+from src.engine import CONTEXTS, STRUCTURES, STYLINGS, Cleaner, Cleanup, Decoder, RoutedEngine, SttEngine, probe_moonshine, probe_s1mini, probe_whisper
 from src.errors import AudioRejected, EngineFailed, IdentityRequired, QuotaExceeded, ScribeError
 from src.identity import owner_from_context
 from src.middleware import TokenMiddleware
@@ -114,8 +114,8 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
     usage = Usage()
     engine = engine or RoutedEngine(
         Decoder(lambda: settings.ffmpeg, max_seconds=lambda: settings.max_seconds, decode_timeout_s=lambda: settings.timeout_s),
-        settings.model,
-        lambda: backends.get("whisper"), timeout_s=lambda: settings.timeout_s + 5,
+        lambda: settings.model if chosen_engine(settings) == "whisper" else chosen_engine(settings),
+        lambda: backends.get(chosen_engine(settings)), timeout_s=lambda: settings.timeout_s + 5,
         prefilter=lambda force=None: voice_prefilter(base.voice_dir, settings.voice_gate_threshold)
         if (settings.voice_gate if force is None else force) else None,
     )
@@ -149,7 +149,7 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
 
     @mcp.custom_route("/health", methods=["GET"])
     async def health(request: Request) -> Response:
-        return JSONResponse({"ok": True, "ready": backends.get("whisper") is not None})
+        return JSONResponse({"ok": True, "ready": backends.get(chosen_engine(settings)) is not None})
 
     @mcp.custom_route("/api/transcribe", methods=["POST"])
     @mcp.custom_route("/api/files", methods=["POST"])
@@ -235,8 +235,9 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
             await serve_stream(websocket, service, settings, gate)
 
     async def status() -> list[dict[str, str]]:
-        remote = backends.get("whisper")
-        return [{"label": "Model", "value": settings.model},
+        remote = backends.get(chosen_engine(settings))
+        return [{"label": "Speech engine", "value": chosen_engine(settings)},
+                {"label": "Model", "value": settings.model},
                 {"label": "Speech model runs", "value": "in a model service" if remote else "not connected"}]
 
     if config is not None:
@@ -244,6 +245,8 @@ def build_app(settings: Settings, engine: SttEngine | None = None, config: Confi
                  playground=PLAYGROUND, slots=[
             Slot("whisper", "Speech to text", "The STT_Whisper_Model service that transcribes. Its model must match Scribe's model option, which keys the transcript cache.",
                  probe_whisper, "http://127.0.0.1:29300", local=False),
+            Slot("moonshine", "Speech to text (Moonshine)", "The STT_Moonshine_Model service, used when the Speech engine option is moonshine. English only, no word timestamps, so live dictation cannot trim its audio window.",
+                 probe_moonshine, "http://127.0.0.1:29301", local=False),
             Slot("s1mini", "Transcript cleanup", "The STC_S1Mini_Model service that cleans a transcript when a call asks for cleanup. Optional: with no address, cleanup is skipped.",
                  probe_s1mini, "http://127.0.0.1:29280", local=False),
         ])

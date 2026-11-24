@@ -21,6 +21,7 @@ FIELDS = {
     "stream_max_frame_bytes": ("stream_max_frame_bytes", int),
     "stream_idle_s": ("stream_idle_s", float),
     "stream_window_s": ("stream_window_s", float),
+    "engine": ("engine", str),
     "ffmpeg": ("ffmpeg", str),
     "voice_gate": ("voice_gate", bool),
     "voice_gate_threshold": ("voice_gate_threshold", float),
@@ -33,6 +34,8 @@ def schema(base: Settings) -> list[Setting]:
     return [
         Setting("model", "Whisper model", "text", base.model, blank=False, restart=True,
                 help="Slower models are more accurate. " + _TUNED),
+        Setting("engine", "Speech engine", "text", base.engine, blank=False,
+                help="whisper or moonshine: which model-service slot transcribes (anything else counts as whisper). Moonshine is English only and has no word timestamps. Changing it applies to the next call; cached transcripts are kept per engine."),
         Setting("max_seconds", "Longest audio (seconds)", "int", base.max_seconds, minimum=1, maximum=3600,
                 help="Live dictation is capped at 150 s. " + _TUNED),
         Setting("timeout_s", "Transcription time limit (seconds)", "int", base.timeout_s, minimum=1, maximum=600,
