@@ -23,3 +23,11 @@ def test_environment_overrides(monkeypatch, tmp_path):
     settings = load_settings()
     assert settings.port == 9001 and settings.max_seconds == 90
     assert settings.ttl_seconds == 7200 and settings.audio_dir == tmp_path / "audio"
+
+
+def test_chosen_engine_falls_back_to_whisper():
+    from dataclasses import replace
+    from src.config import Settings, chosen_engine
+    assert chosen_engine(Settings()) == "whisper"
+    assert chosen_engine(replace(Settings(), engine=" Moonshine ")) == "moonshine"
+    assert chosen_engine(replace(Settings(), engine="nope")) == "whisper"

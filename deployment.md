@@ -1,6 +1,6 @@
 # Deploying Scribe
 
-Scribe is one HTTP and MCP service (speech to text) on port 29401. It runs no model itself: it needs a STT_Whisper_Model connection saved on its admin page.
+Scribe is one HTTP and MCP service (speech to text) on port 29401. It runs no model itself: it needs a STT_Whisper_Model connection (or STT_Moonshine_Model, English only, no word timestamps) saved on its admin page; the Speech engine option (`SERVICE_ENGINE`, `whisper` or `moonshine`) picks which one transcribes.
 
 ## Ways to run it
 

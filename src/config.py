@@ -22,6 +22,7 @@ class Settings:
     # base.en and 150 s: measured x1.6 real time on a 6-core CPU, and Armory cancels a tool call after 120 s.
     # small.en was x0.5 there. Raise both together on a faster or GPU host.
     model: str = "base.en"
+    engine: str = "whisper"  # which speech slot transcribes: "whisper" or "moonshine"; anything else counts as whisper
     ffmpeg: str = "ffmpeg"
     max_bytes: int = 25 * 1024 * 1024
     max_seconds: int = 150
@@ -62,6 +63,15 @@ class Settings:
         return not self.admin_password.strip() and self.host not in LOOPBACK_HOSTS
 
 
+ENGINES = ("whisper", "moonshine")
+
+
+def chosen_engine(settings: Settings) -> str:
+    """The model-service slot that transcribes."""
+    name = settings.engine.strip().lower()
+    return name if name in ENGINES else "whisper"
+
+
 def _from_environment() -> Settings:
     env = os.environ.get
     return Settings(
@@ -69,6 +79,7 @@ def _from_environment() -> Settings:
         port=int(env("SERVICE_PORT", "29401")),
                 data_dir=Path(env("SERVICE_DATA_DIR") or PROJECT_DIR / ".data"),
         model=env("SERVICE_MODEL", "base.en"),
+        engine=env("SERVICE_ENGINE", "whisper"),
         ffmpeg=env("SERVICE_FFMPEG", "ffmpeg"),
         max_bytes=int(env("SERVICE_MAX_BYTES", str(25 * 1024 * 1024))),
         max_seconds=int(env("SERVICE_MAX_SECONDS", "150")),

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Moonshine engine
+
+A second speech slot, `moonshine` (`STT_Moonshine_Model`, port 29301), beside `whisper`. The new Speech engine option (`SERVICE_ENGINE`, `whisper` or `moonshine`, live) picks which slot transcribes; `/health` `ready` follows it. Moonshine is English only and returns no word timestamps, so live dictation cannot trim its audio window and ends with an error at the window bound. Cached transcripts are keyed per engine.
+
 ### Neutral dark theme
 
 The admin page's dark theme uses the neutral dark palette with the orange accent again, in place of the blue-navy one from the tabbed redesign. The light theme is unchanged.
