@@ -6,10 +6,12 @@ name: scribe
 
 services:
   scribe:
+    extra_hosts: ["host.docker.internal:host-gateway"]  # reaches services published on the host
     build: .
     restart: unless-stopped
     environment:
       SERVICE_MODEL: ${SERVICE_MODEL:-base.en}
+      SERVICE_ENGINE: ${SERVICE_ENGINE:-whisper}
       SERVICE_ADMIN_PASSWORD: ${SERVICE_ADMIN_PASSWORD:?set SERVICE_ADMIN_PASSWORD in .env (it unlocks the token page)}
       SERVICE_MAX_SECONDS: ${SERVICE_MAX_SECONDS:-150}
       SERVICE_STREAM_CAPACITY: ${SERVICE_STREAM_CAPACITY:-2}
